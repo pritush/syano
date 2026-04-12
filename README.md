@@ -50,7 +50,6 @@ Syano is a free, open-source URL shortener that gives you complete control over 
 ### Link-in-Bio
 - **Beautiful Bio Pages** - Customizable link-in-bio like Linktree
 - **Profile Customization** - Name, bio, avatar, and social links
-- **Multiple Links** - Add unlimited links with icons and colors
 - **Share Profile** - One-click sharing
 
 
@@ -58,6 +57,21 @@ Syano is a free, open-source URL shortener that gives you complete control over 
 
 ## Screenshots
 ![Syano screenshot](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/fcc6b6fcde2624a3cc5d80c0b25325b554c349a4/uploads/2026-04-12T11-39-00-437Z-06pwoe4r7.jpg)
+
+### Demo
+Netlify+NeonDB
+https://syano.netlify.app/
+
+Help collect more samples:
+https://syano.netlify.app/gmap 
+https://syano.netlify.app/smo5r
+https://syano.netlify.app/jubfz
+https://syano.netlify.app/klcvx
+https://syano.netlify.app/84jdnh
+https://syano.netlify.app/klcvx
+https://syano.netlify.app/4gxp72
+
+
 
 ## 🚀 Quick Start
 
