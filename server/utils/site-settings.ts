@@ -1,0 +1,51 @@
+import type { H3Event } from 'h3'
+import { eq } from 'drizzle-orm'
+import { createDefaultSiteSettings, SiteSettingsSchema, type SiteSettings } from '~/shared/schemas/settings'
+import { site_settings } from '~/server/database/schema'
+import { useDrizzle } from '~/server/utils/db'
+
+export function normalizeSiteSettings(input: unknown): SiteSettings {
+  const parsed = SiteSettingsSchema.safeParse(input)
+  return parsed.success ? parsed.data : createDefaultSiteSettings()
+}
+
+export async function loadSiteSettingsForHomepage(event?: H3Event): Promise<SiteSettings> {
+  const db = await useDrizzle(event)
+  const row = await db.query.site_settings.findFirst({
+    where: eq(site_settings.id, 'default'),
+  })
+
+  if (!row) {
+    return createDefaultSiteSettings()
+  }
+
+  return normalizeSiteSettings({
+    homepage_mode: row.homepage_mode,
+    redirect_url: row.redirect_url,
+    bio_content: row.bio_content,
+  })
+}
+
+export async function saveSiteSettings(event: H3Event, input: SiteSettings) {
+  const db = await useDrizzle(event)
+  const payload = normalizeSiteSettings(input)
+
+  await db
+    .insert(site_settings)
+    .values({
+      id: 'default',
+      homepage_mode: payload.homepage_mode,
+      redirect_url: payload.redirect_url,
+      bio_content: payload.bio_content,
+    })
+    .onConflictDoUpdate({
+      target: site_settings.id,
+      set: {
+        homepage_mode: payload.homepage_mode,
+        redirect_url: payload.redirect_url,
+        bio_content: payload.bio_content,
+      },
+    })
+
+  return payload
+}

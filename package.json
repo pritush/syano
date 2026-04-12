@@ -1,0 +1,45 @@
+{
+  "name": "syano",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 7466",
+    "build": "nuxt build",
+    "preview": "node .output/server/index.mjs",
+    "prepare": "nuxt prepare",
+    "types:check": "nuxt typecheck",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:indexes": "node scripts/apply-performance-indexes.mjs"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.101",
+    "@nuxt/icon": "2.2.1",
+    "@nuxt/ui": "4.6.1",
+    "@nuxtjs/color-mode": "^4.0.0",
+    "chart.js": "^4.5.1",
+    "d3-geo": "^3.1.1",
+    "drizzle-orm": "^0.33.0",
+    "geoip-lite": "^2.0.1",
+    "nuxt": "4.4.2",
+    "pg": "^8.12.0",
+    "topojson-client": "^3.1.0",
+    "ua-parser-js": "^2.0.9",
+    "vue": "^3.4.38",
+    "vue-chartjs": "^5.3.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "@types/node": "^22.10.1",
+    "@types/pg": "^8.11.10",
+    "@types/topojson-client": "^3.1.5",
+    "drizzle-kit": "^0.24.2",
+    "postcss": "8.4.49",
+    "tailwindcss": "4.2.2",
+    "typescript": "^5.6.3",
+    "vue-tsc": "^2.1.10"
+  },
+  "packageManager": "pnpm@10.0.0"
+}
