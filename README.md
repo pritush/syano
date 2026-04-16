@@ -13,6 +13,8 @@
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Deploy](#-deployment) • [Docs](#-documentation)
 
+<a href="https://www.producthunt.com/products/syano-opensource-url-shortener?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-syano-opensource-url-shortener" target="_blank" rel="noopener noreferrer"><img alt="Syano - Opensource URL shortener - url shortener, link shortener, bitly alternative | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1121910&theme=light&t=1776003459663"></a>
+
 </div>
 
 ---

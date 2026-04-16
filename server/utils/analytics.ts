@@ -38,6 +38,8 @@ function renderScope(fragment: QueryFragment) {
   return { joins, where, values: fragment.values }
 }
 
+export { renderScope, buildFilterSql }
+
 export async function getAnalyticsCounters(event: H3Event, filters: AnalyticsQuery) {
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
@@ -269,4 +271,22 @@ export async function getAnalyticsLocations(event: H3Event, filters: AnalyticsQu
   )
 
   return rows
+}
+
+export async function getQrScans(event: H3Event, filters: AnalyticsQuery) {
+  const pool = await usePool(event)
+  const fragment = buildFilterSql(filters)
+  const scope = renderScope(fragment)
+
+  const { rows } = await pool.query<{ qr_scans: number }>(
+    `
+      SELECT COUNT(*)::int AS qr_scans
+      FROM qr_scans a
+      ${scope.joins}
+      ${scope.where}
+    `,
+    scope.values,
+  )
+
+  return { qr_scans: rows[0]?.qr_scans || 0 }
 }

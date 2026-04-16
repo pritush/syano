@@ -100,6 +100,7 @@ const socialPlatforms = [
 const form = reactive({
   homepage_mode: 'DEFAULT' as SiteSettings['homepage_mode'],
   redirect_url: '',
+  redirect_timeout: 3,
   profile_name: 'Syano',
   profile_bio: '',
   profile_initials: 'SY',
@@ -139,6 +140,7 @@ function newId() {
 function applySettings(settings: SiteSettings) {
   form.homepage_mode = settings.homepage_mode
   form.redirect_url = settings.redirect_url || ''
+  form.redirect_timeout = settings.redirect_timeout ?? 3
   form.profile_name = settings.bio_content.profile.name
   form.profile_bio = settings.bio_content.profile.bio || ''
   form.profile_initials = settings.bio_content.profile.initials || ''
@@ -168,6 +170,7 @@ function buildSettingsPayload(): SiteSettings {
   return {
     homepage_mode: form.homepage_mode,
     redirect_url: formatUrl(form.redirect_url) || null,
+    redirect_timeout: Number(form.redirect_timeout) || 0,
     bio_content: {
       profile: {
         name: form.profile_name.trim() || 'Syano',
@@ -408,7 +411,7 @@ onMounted(loadSettings)
             Redirect Delay
           </p>
           <p class="mt-2 text-2xl font-semibold text-accent-600 dark:text-accent-400">
-            3s
+            {{ form.homepage_mode === 'REDIRECT' ? form.redirect_timeout + 's' : '-' }}
           </p>
         </div>
       </div>
@@ -497,15 +500,28 @@ onMounted(loadSettings)
             </p>
           </div>
 
-          <UFormField label="Target URL" class="space-y-2">
-            <UInput 
-              v-model="form.redirect_url" 
-              type="url" 
-              placeholder="https://example.com" 
-              size="lg"
-              class="rounded-xl"
-            />
-          </UFormField>
+          <div class="space-y-5">
+            <UFormField label="Target URL" class="space-y-2">
+              <UInput 
+                v-model="form.redirect_url" 
+                type="url" 
+                placeholder="https://example.com" 
+                size="lg"
+                class="rounded-xl"
+              />
+            </UFormField>
+
+            <UFormField label="Delay (seconds)" class="space-y-2 max-w-xs">
+              <UInput 
+                v-model="form.redirect_timeout" 
+                type="number"
+                min="0"
+                max="60"
+                size="lg"
+                class="rounded-xl"
+              />
+            </UFormField>
+          </div>
         </div>
 
         <!-- BIO Mode Sections -->

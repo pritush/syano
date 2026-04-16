@@ -60,6 +60,47 @@ const restoreTables = ref({
 const statusMessage = ref('')
 const errorMessage = ref('')
 
+// Schema Checking
+const schemaChecking = ref(true)
+const schemaUpgrading = ref(false)
+const schemaStatus = ref<{ upToDate: boolean; missing: string[]; error?: string } | null>(null)
+
+async function checkSchema() {
+  try {
+    schemaStatus.value = await $fetch('/api/database/schema-check')
+  } catch (e: any) {
+    // Silent fail
+  } finally {
+    schemaChecking.value = false
+  }
+}
+
+async function upgradeSchema() {
+  schemaUpgrading.value = true
+  statusMessage.value = ''
+  errorMessage.value = ''
+  
+  try {
+    const res = await api.request<{ success: boolean; message: string; error?: string }>('/api/database/upgrade', { method: 'POST' })
+    if (res.success) {
+      statusMessage.value = 'Database schema successfully upgraded to match latest version.'
+      toasts.success('Upgrade completed', res.message)
+      await checkSchema()
+    } else {
+      throw new Error(res.error)
+    }
+  } catch (error: any) {
+    errorMessage.value = error?.message || error?.data?.statusMessage || 'Unable to run database migrations.'
+    toasts.error('Upgrade failed', errorMessage.value)
+  } finally {
+    schemaUpgrading.value = false
+  }
+}
+
+onMounted(() => {
+  checkSchema()
+})
+
 async function exportLinks() {
   exporting.value = true
   statusMessage.value = ''
@@ -233,6 +274,31 @@ function downloadBackup() {
         <p class="font-medium">{{ errorMessage }}</p>
       </div>
     </transition>
+
+    <!-- Schema Upgrade Assistant -->
+    <div v-if="!schemaChecking && schemaStatus?.upToDate === false" class="rounded-[24px] bg-brand-50 p-6 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/10 dark:ring-brand-800/30">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="lucide:sparkles" class="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h3 class="text-lg font-semibold text-brand-900 dark:text-brand-100">Database Update Available</h3>
+          </div>
+          <p class="text-sm text-brand-700 dark:text-brand-300">
+            We detected that your PostgreSQL schema is missing some of the latest update structures.
+          </p>
+          <ul class="mt-3 list-inside list-disc text-sm text-brand-700 dark:text-brand-300">
+            <li v-for="item in schemaStatus.missing" :key="item">{{ item }}</li>
+          </ul>
+        </div>
+        <UButton :loading="schemaUpgrading" @click="upgradeSchema" color="primary" size="lg" icon="lucide:database-zap" class="shrink-0">
+          Apply Database Update
+        </UButton>
+      </div>
+    </div>
+    <div v-else-if="!schemaChecking && schemaStatus?.upToDate === true" class="flex items-center gap-2 rounded-[20px] bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
+      <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
+      Database schema is fully up to date. No updates required.
+    </div>
 
     <!-- Full Database Backup/Restore -->
     <div class="space-y-4">

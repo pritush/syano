@@ -53,5 +53,13 @@ export const site_settings = pgTable('site_settings', {
   id: varchar('id', { length: 8 }).primaryKey().notNull(),
   homepage_mode: varchar('homepage_mode', { length: 20 }),
   redirect_url: varchar('redirect_url', { length: 2048 }),
+  redirect_timeout: bigint('redirect_timeout', { mode: 'number' }).default(3),
   bio_content: jsonb('bio_content'),
+})
+
+export const qr_scans = pgTable('qr_scans', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  link_id: varchar('link_id', { length: 64 }).references(() => links.id, { onDelete: 'cascade' }),
+  slug: varchar('slug', { length: 128 }),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })

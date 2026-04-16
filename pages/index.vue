@@ -50,6 +50,7 @@ useSeoMeta({
   <HomeRedirect
     v-else-if="homepageMode === 'REDIRECT'"
     :redirect-url="settings?.redirect_url || '/'"
+    :redirect-timeout="settings?.redirect_timeout ?? 3"
   />
   <HomeDefault v-else />
 </template>

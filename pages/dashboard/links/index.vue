@@ -50,6 +50,8 @@ const tags = ref<TagItem[]>([])
 const loading = ref(true)
 const deletingSlug = ref<string | null>(null)
 const copiedSlug = ref<string | null>(null)
+const qrModalSlug = ref<string | null>(null)
+const qrModalOpen = ref(false)
 const errorMessage = ref('')
 const statusMessage = ref('')
 const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
@@ -119,6 +121,16 @@ function openEditPage(slug: string) {
 
 function openLinkAnalytics(slug: string) {
   navigateTo(`/dashboard/analytics?slug=${slug}`)
+}
+
+function openQRModal(slug: string) {
+  qrModalSlug.value = slug
+  qrModalOpen.value = true
+}
+
+function closeQRModal() {
+  qrModalOpen.value = false
+  qrModalSlug.value = null
 }
 
 const tagMap = computed<Record<string, TagItem>>(() => {
@@ -437,6 +449,16 @@ onMounted(async () => {
               <UIcon v-else name="lucide:copy" class="h-4 w-4" />
             </button>
 
+            <button
+              type="button"
+              class="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all duration-200 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-purple-500 dark:hover:bg-purple-900/20 dark:hover:text-purple-400"
+              title="View QR Code"
+              aria-label="View QR Code"
+              @click.stop="openQRModal(link.slug)"
+            >
+              <UIcon name="lucide:qr-code" class="h-4 w-4" />
+            </button>
+
             <a
               :href="`/${link.slug}`"
               target="_blank"
@@ -544,5 +566,12 @@ onMounted(async () => {
     confirm-label="Delete Link"
     @confirm="confirmRemoveLink"
     @cancel="closeDeleteModal"
+  />
+
+  <!-- QR Code Modal -->
+  <DashboardQRCodeViewer
+    v-if="qrModalSlug"
+    v-model="qrModalOpen"
+    :slug="qrModalSlug"
   />
 </template>

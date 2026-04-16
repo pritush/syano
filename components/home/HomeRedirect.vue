@@ -1,14 +1,24 @@
 <script setup lang="ts">
 const props = defineProps<{
   redirectUrl: string
+  redirectTimeout: number
 }>()
 
-const countdown = ref(3)
+const timeoutValue = computed(() => Number(props.redirectTimeout) ?? 3)
+const countdown = ref(timeoutValue.value)
 const destination = computed(() => props.redirectUrl || '/')
-const progress = computed(() => `${((3 - countdown.value) / 3) * 100}%`)
+const progress = computed(() => {
+  if (timeoutValue.value <= 0) return '100%'
+  return `${((timeoutValue.value - countdown.value) / timeoutValue.value) * 100}%`
+})
 let timer: number | null = null
 
 onMounted(() => {
+  if (countdown.value <= 0) {
+    window.location.href = destination.value
+    return
+  }
+
   timer = window.setInterval(() => {
     if (countdown.value <= 1) {
       if (timer !== null) {

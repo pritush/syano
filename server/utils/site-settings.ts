@@ -22,6 +22,7 @@ export async function loadSiteSettingsForHomepage(event?: H3Event): Promise<Site
   return normalizeSiteSettings({
     homepage_mode: row.homepage_mode,
     redirect_url: row.redirect_url,
+    redirect_timeout: row.redirect_timeout,
     bio_content: row.bio_content,
   })
 }
@@ -36,6 +37,7 @@ export async function saveSiteSettings(event: H3Event, input: SiteSettings) {
       id: 'default',
       homepage_mode: payload.homepage_mode,
       redirect_url: payload.redirect_url,
+      redirect_timeout: payload.redirect_timeout,
       bio_content: payload.bio_content,
     })
     .onConflictDoUpdate({
@@ -43,6 +45,7 @@ export async function saveSiteSettings(event: H3Event, input: SiteSettings) {
       set: {
         homepage_mode: payload.homepage_mode,
         redirect_url: payload.redirect_url,
+        redirect_timeout: payload.redirect_timeout,
         bio_content: payload.bio_content,
       },
     })

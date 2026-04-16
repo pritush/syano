@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3'
-import { getHeader, getRequestIP } from 'h3'
+import { getHeader, getRequestIP, getQuery } from 'h3'
 import geoip from 'geoip-lite'
 import { UAParser } from 'ua-parser-js'
-import { access_logs } from '~/server/database/schema'
+import { access_logs, qr_scans } from '~/server/database/schema'
 import type { StoredLink } from '~/server/utils/link-store'
 import { useDrizzle } from '~/server/utils/db'
 
@@ -76,6 +76,7 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
   const deviceType = result.device.type || 'desktop'
   const [latitude, longitude] = geo?.ll || [null, null]
 
+  // Record standard access log
   await db.insert(access_logs).values({
     link_id: link.id,
     slug: link.slug,
@@ -96,4 +97,13 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
     latitude: null, // REDACTED FOR PRIVACY
     longitude: null, // REDACTED FOR PRIVACY
   })
+
+  // Track QR scans separately if parameter is present
+  const query = getQuery(event)
+  if (query.r === 'qr') {
+    await db.insert(qr_scans).values({
+      link_id: link.id,
+      slug: link.slug,
+    })
+  }
 }

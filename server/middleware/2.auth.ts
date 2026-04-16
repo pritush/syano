@@ -17,6 +17,11 @@ export default defineEventHandler((event) => {
     return
   }
 
+  // Allow QR code generation (no auth needed, no sensitive data)
+  if (pathname.startsWith('/api/qr/')) {
+    return
+  }
+
   const runtimeConfig = useRuntimeConfig(event)
   const authorization = getHeader(event, 'authorization') || ''
   const username = getHeader(event, 'x-site-user') || ''

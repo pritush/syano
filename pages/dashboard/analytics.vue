@@ -76,6 +76,7 @@ const slug = ref(typeof route.query.slug === 'string' ? route.query.slug : '')
 const selectedTagId = ref('')
 const loading = ref(true)
 const errorMessage = ref('')
+const qrModalOpen = ref(false)
 
 const tags = ref<TagItem[]>([])
 const counters = ref<Counters>({
@@ -84,6 +85,7 @@ const counters = ref<Counters>({
   clicks_last_7d: 0,
   unique_slugs: 0,
 })
+const qrScans = ref(0)
 const views = ref<ViewsResponse['items']>([])
 const metrics = ref<MetricsResponse>({
   devices: [],
@@ -192,13 +194,14 @@ async function loadAnalytics() {
 
   try {
     const query = queryParams()
-    const [counterData, viewData, metricData, heatmapData, eventData, locationData] = await Promise.all([
+    const [counterData, viewData, metricData, heatmapData, eventData, locationData, qrData] = await Promise.all([
       api.request<Counters>('/api/stats/counters', { query }),
       api.request<ViewsResponse>('/api/stats/views', { query }),
       api.request<MetricsResponse>('/api/stats/metrics', { query }),
       api.request<HeatmapResponse>('/api/stats/heatmap', { query }),
       api.request<EventsResponse>('/api/logs/events', { query: { ...query, limit: 12 } }),
       api.request<LocationsResponse>('/api/logs/locations', { query }),
+      api.request<{ qr_scans: number }>('/api/stats/qr-scans', { query }),
     ])
 
     counters.value = counterData
@@ -207,6 +210,7 @@ async function loadAnalytics() {
     heatmap.value = heatmapData.items
     events.value = eventData.items
     locations.value = locationData.items
+    qrScans.value = qrData.qr_scans
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to load analytics.'
   } finally {
@@ -248,9 +252,21 @@ onMounted(async () => {
               Inspect traffic
             </h1>
           </div>
-          <UButton :disabled="loading" @click="loadAnalytics">
-            {{ loading ? 'Refreshing…' : 'Refresh analytics' }}
-          </UButton>
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="slug.trim()"
+              color="neutral"
+              variant="soft"
+              title="View QR Code"
+              @click="qrModalOpen = true"
+            >
+              <UIcon name="lucide:qr-code" class="h-4 w-4" />
+              QR Code
+            </UButton>
+            <UButton :disabled="loading" @click="loadAnalytics">
+              {{ loading ? 'Refreshing…' : 'Refresh analytics' }}
+            </UButton>
+          </div>
         </div>
       </template>
 
@@ -305,6 +321,18 @@ onMounted(async () => {
 
       <UCard class="sy-surface rounded-[24px] border-0">
         <div class="flex items-center gap-4">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
+            <UIcon name="lucide:qr-code" class="h-6 w-6" />
+          </div>
+          <div>
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">QR scans</p>
+            <p class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{{ qrScans }}</p>
+          </div>
+        </div>
+      </UCard>
+
+      <UCard class="sy-surface rounded-[24px] border-0">
+        <div class="flex items-center gap-4">
           <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-sky-50 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400">
             <UIcon name="lucide:clock-3" class="h-6 w-6" />
           </div>
@@ -323,18 +351,6 @@ onMounted(async () => {
           <div>
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Last 7 days</p>
             <p class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{{ counters.clicks_last_7d }}</p>
-          </div>
-        </div>
-      </UCard>
-
-      <UCard class="sy-surface rounded-[24px] border-0">
-        <div class="flex items-center gap-4">
-          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
-            <UIcon name="lucide:link-2" class="h-6 w-6" />
-          </div>
-          <div>
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Unique slugs</p>
-            <p class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{{ counters.unique_slugs }}</p>
           </div>
         </div>
       </UCard>
@@ -494,4 +510,11 @@ onMounted(async () => {
       </ClientOnly>
     </UCard>
   </div>
+
+  <!-- QR Code Modal -->
+  <DashboardQRCodeViewer
+    v-if="slug.trim()"
+    v-model="qrModalOpen"
+    :slug="slug.trim()"
+  />
 </template>

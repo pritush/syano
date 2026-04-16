@@ -32,6 +32,7 @@ export const BioContentSchema = z.object({
 export const SiteSettingsSchema = z.object({
   homepage_mode: HomepageModeSchema.default('DEFAULT'),
   redirect_url: z.string().url().nullish().transform((value) => value || null),
+  redirect_timeout: z.number().min(0).max(60).default(3),
   bio_content: BioContentSchema.default({
     profile: { name: 'Syano', bio: null, initials: null, avatar_url: null },
     links: [],
@@ -47,6 +48,7 @@ export function createDefaultSiteSettings(): SiteSettings {
   return SiteSettingsSchema.parse({
     homepage_mode: 'DEFAULT',
     redirect_url: null,
+    redirect_timeout: 3,
     bio_content: {
       profile: {
         name: 'Syano',

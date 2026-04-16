@@ -41,6 +41,7 @@ const statusMessage = ref('')
 const errorMessage = ref('')
 const copied = ref(false)
 const createdLink = ref<{ slug: string; url: string } | null>(null)
+const qrModalOpen = ref(false)
 
 // Accordion toggles
 const showExpiration = ref(false)
@@ -146,6 +147,7 @@ function createAnother() {
   createdLink.value = null
   statusMessage.value = ''
   errorMessage.value = ''
+  qrModalOpen.value = false
   form.url = ''
   form.comment = ''
   form.apple = ''
@@ -214,6 +216,21 @@ const shortLinkPreview = computed(() => {
           </button>
         </div>
         <p class="sy-success-dest">→ {{ createdLink.url }}</p>
+      </div>
+
+      <!-- QR Code Preview -->
+      <div class="mt-6 flex flex-col items-center gap-4">
+        <p class="text-sm font-medium text-slate-600 dark:text-slate-400">QR Code</p>
+        <DashboardQRCodeInline :slug="createdLink.slug" :size="160" />
+        <UButton
+          color="neutral"
+          variant="soft"
+          size="sm"
+          @click="qrModalOpen = true"
+        >
+          <UIcon name="lucide:download" class="h-4 w-4" />
+          Download QR Code
+        </UButton>
       </div>
 
       <div class="sy-success-actions">
@@ -522,4 +539,11 @@ const shortLinkPreview = computed(() => {
       </div>
     </form>
   </div>
+
+  <!-- QR Code Modal -->
+  <DashboardQRCodeViewer
+    v-if="createdLink"
+    v-model="qrModalOpen"
+    :slug="createdLink.slug"
+  />
 </template>
