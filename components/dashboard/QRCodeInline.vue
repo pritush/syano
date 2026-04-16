@@ -5,35 +5,20 @@ const props = defineProps<{
 }>()
 
 const displaySize = computed(() => props.size || 120)
-const loading = ref(false)
-const error = ref(false)
-const svgContent = ref('')
 
-async function fetchQR() {
-  if (!props.slug) return
+// useFetch pre-fetches this on the server side so the DOM delivers the QR code natively without waterfalls
+const { data: svgContent, status, refresh } = useFetch<string>(() => `/api/qr/${props.slug}?format=svg`, {
+  responseType: 'text',
+  lazy: true,
+  server: true // Let Nitro bake it immediately into HTML
+})
 
-  loading.value = true
-  error.value = false
-  svgContent.value = ''
+const loading = computed(() => status.value === 'pending')
+const error = computed(() => status.value === 'error')
 
-  try {
-    const response = await $fetch<string>(`/api/qr/${props.slug}?format=svg`, {
-      responseType: 'text',
-    })
-    svgContent.value = response
-  } catch (err) {
-    console.error('QR inline fetch error:', err)
-    error.value = true
-  } finally {
-    loading.value = false
-  }
+function fetchQR() {
+  refresh()
 }
-
-watch(() => props.slug, (newSlug) => {
-  if (newSlug) {
-    fetchQR()
-  }
-}, { immediate: true })
 </script>
 
 <template>

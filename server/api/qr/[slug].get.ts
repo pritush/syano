@@ -1,7 +1,7 @@
 import { defineEventHandler, getRouterParam, getQuery, createError, setHeader } from 'h3'
 import QRCode from 'qrcode'
 
-export default defineEventHandler(async (event) => {
+export default defineCachedEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const query = getQuery(event)
   const format = (query.format as string) || 'svg'
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get the origin from the request
-  const origin = event.node.req.headers.origin || event.node.req.headers.host || 'http://localhost:7466'
+  const origin = event.node.req?.headers?.origin || event.node.req?.headers?.host || 'http://localhost:7466'
   const protocol = origin.includes('localhost') ? 'http://' : 'https://'
   const host = origin.replace(/^https?:\/\//, '')
   
@@ -63,5 +63,13 @@ export default defineEventHandler(async (event) => {
       statusCode: 500,
       statusMessage: 'Failed to generate QR code',
     })
+  }
+}, {
+  maxAge: 60 * 60 * 24 * 7, // Highly aggressive 1-week caching
+  name: 'syano_qr_gen',
+  getKey: (event) => {
+    const slug = getRouterParam(event, 'slug') || 'error'
+    const format = getQuery(event).format || 'svg'
+    return `${slug}_${format}`
   }
 })

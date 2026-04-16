@@ -84,6 +84,12 @@ export default defineNuxtConfig({
       ssr: false,
       // Preload critical dashboard assets
     },
+    '/api/qr/**': {
+      swr: 60 * 60 * 24 * 7,
+      headers: {
+        'cache-control': 'public, max-age=604800, immutable',
+      },
+    },
     '/api/**': {
       headers: {
         'cache-control': 'no-cache, no-store, must-revalidate',
