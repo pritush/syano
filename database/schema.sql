@@ -59,11 +59,20 @@ CREATE TABLE IF NOT EXISTS access_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- QR scans tracking table
+CREATE TABLE IF NOT EXISTS qr_scans (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    link_id VARCHAR(64) REFERENCES links(id) ON DELETE CASCADE,
+    slug VARCHAR(128),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Site settings table for homepage configuration
 CREATE TABLE IF NOT EXISTS site_settings (
     id VARCHAR(8) PRIMARY KEY NOT NULL,
     homepage_mode VARCHAR(20),
     redirect_url VARCHAR(2048),
+    redirect_timeout BIGINT DEFAULT 3,
     bio_content JSONB
 );
 
@@ -86,11 +95,12 @@ CREATE INDEX IF NOT EXISTS idx_links_active ON links(created_at DESC)
   WHERE expiration IS NULL OR expiration > EXTRACT(EPOCH FROM NOW()) * 1000;
 
 -- Insert default site settings
-INSERT INTO site_settings (id, homepage_mode, redirect_url, bio_content)
+INSERT INTO site_settings (id, homepage_mode, redirect_url, redirect_timeout, bio_content)
 VALUES (
     'default',
     'DEFAULT',
     NULL,
+    3,
     '{"profile": {"name": "Syano", "bio": null, "initials": "SY", "avatar_url": null}, "links": [], "socials": []}'::jsonb
 )
 ON CONFLICT (id) DO NOTHING;

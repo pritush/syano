@@ -67,7 +67,7 @@ const schemaStatus = ref<{ upToDate: boolean; missing: string[]; error?: string 
 
 async function checkSchema() {
   try {
-    schemaStatus.value = await $fetch('/api/database/schema-check')
+    schemaStatus.value = await api.request<{ upToDate: boolean; missing: string[]; error?: string }>('/api/database/schema-check')
   } catch (e: any) {
     // Silent fail
   } finally {
