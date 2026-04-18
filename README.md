@@ -37,6 +37,7 @@ Syano is a free, open-source URL shortener that gives you complete control over 
 ### Core Features
 - **Custom Short Links** - Create memorable URLs with custom slugs
 - **Link Organization** - Organize with tags and comments
+- **QR Codes Generation** - Generate QR Codes of URL and also collect scan data.
 - **Search & Filter** - Find links quickly
 - **Link Expiration** - Set automatic expiration dates
 - **Password Protection** - Secure sensitive links
