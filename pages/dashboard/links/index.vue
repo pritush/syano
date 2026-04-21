@@ -265,6 +265,7 @@ async function confirmRemoveLink() {
 
     await loadLinks()
     toasts.deleted(`/${slug}`, 'Link')
+    deletingSlug.value = null
     closeDeleteModal()
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to delete this link.'

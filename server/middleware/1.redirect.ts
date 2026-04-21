@@ -35,7 +35,7 @@ function appendRequestQuery(destination: string, requestUrl: URL) {
 
   const target = new URL(destination)
   requestUrl.searchParams.forEach((value, key) => {
-    target.searchParams.append(key, value)
+    target.searchParams.set(key, value)
   })
   return target.toString()
 }
@@ -101,8 +101,23 @@ export default defineEventHandler(async (event) => {
   const ua = getHeader(event, 'user-agent') || ''
   let destination = resolveDestination(link, ua)
 
+  const alwaysForward = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref']
+  
   if (runtimeConfig.redirectWithQuery || link.redirect_with_query) {
     destination = appendRequestQuery(destination, requestUrl)
+  } else {
+    // Selectively forward UTM parameters even if global query forwarding is disabled
+    const target = new URL(destination)
+    let forwardedUTMs = false
+    alwaysForward.forEach(param => {
+      if (requestUrl.searchParams.has(param)) {
+        target.searchParams.set(param, requestUrl.searchParams.get(param)!)
+        forwardedUTMs = true
+      }
+    })
+    if (forwardedUTMs) {
+      destination = target.toString()
+    }
   }
 
   await useAccessLog(event, link)

@@ -577,12 +577,46 @@
   white-space: nowrap;
 }
 
+.sy-success-qr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d4f5f3;
+  background: #f0fdfb;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f766e;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.sy-success-qr-btn:hover {
+  background: #fff;
+  border-color: #1ca39d;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.1);
+  transform: translateY(-1px);
+}
+
+.dark .sy-success-qr-btn {
+  background: rgba(20, 184, 166, 0.06);
+  border-color: #0f766e;
+  color: #5eead4;
+}
+
+.dark .sy-success-qr-btn:hover {
+  background: rgba(20, 184, 166, 0.12);
+  border-color: #14b8a6;
+}
+
 .sy-success-actions {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  margin-top: 2rem;
 }
 
 
@@ -817,4 +851,103 @@
 .dark .sy-create-status {
   background: rgba(20, 184, 166, 0.08);
   color: #5eead4;
+}
+
+/* UTM Builder Styles */
+.sy-utm-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sy-utm-field {
+  display: flex;
+  border: 1px solid #dce3ec;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.sy-utm-field:focus-within {
+  border-color: #1ca39d;
+  box-shadow: 0 0 0 3px rgba(28, 163, 157, 0.1);
+}
+
+.sy-utm-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8fafc;
+  border-right: 1px solid #dce3ec;
+  width: 125px;
+  flex-shrink: 0;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.sy-utm-input {
+  flex: 1;
+  padding: 0.6rem 0.85rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.sy-utm-input::placeholder {
+  color: #b0bec5;
+}
+
+.sy-utm-preview-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.sy-utm-preview-box {
+  background: #f8fafc;
+  border: 1px solid #dce3ec;
+  border-radius: 0.6rem;
+  padding: 0.85rem;
+  font-size: 0.82rem;
+  color: #64748b;
+  word-break: break-all;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace, inherit;
+}
+
+.dark .sy-utm-field {
+  border-color: #334155;
+}
+
+.dark .sy-utm-field:focus-within {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+}
+
+.dark .sy-utm-label {
+  background: #1e293b;
+  border-right-color: #334155;
+  color: #94a3b8;
+}
+
+.dark .sy-utm-input {
+  color: #e2e8f0;
+}
+
+.dark .sy-utm-input::placeholder {
+  color: #64748b;
+}
+
+.dark .sy-utm-preview-header {
+  color: #cbd5e1;
+}
+
+.dark .sy-utm-preview-box {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
 }

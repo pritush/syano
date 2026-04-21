@@ -62,6 +62,55 @@ const form = reactive<LinkForm>({
   unsafe: false,
 })
 
+const showUtmBuilder = ref(false)
+const utm = reactive({
+  source: '',
+  medium: '',
+  campaign: '',
+  term: '',
+  content: '',
+  referral: ''
+})
+
+watch(() => form.url, (newUrl) => {
+  try {
+    const urlObj = new URL(newUrl)
+    utm.source = urlObj.searchParams.get('utm_source') || ''
+    utm.medium = urlObj.searchParams.get('utm_medium') || ''
+    utm.campaign = urlObj.searchParams.get('utm_campaign') || ''
+    utm.term = urlObj.searchParams.get('utm_term') || ''
+    utm.content = urlObj.searchParams.get('utm_content') || ''
+    utm.referral = urlObj.searchParams.get('ref') || ''
+  } catch {
+    // invalid url
+  }
+})
+
+watch(utm, () => {
+  if (!form.url) return
+  try {
+    const urlObj = new URL(form.url)
+    const update = (key: string, val: string) => {
+      if (val) urlObj.searchParams.set(key, val)
+      else urlObj.searchParams.delete(key)
+    }
+    update('utm_source', utm.source)
+    update('utm_medium', utm.medium)
+    update('utm_campaign', utm.campaign)
+    update('utm_term', utm.term)
+    update('utm_content', utm.content)
+    update('ref', utm.referral)
+
+    const newUrlStr = urlObj.toString()
+    if (form.url !== newUrlStr) {
+      form.url = newUrlStr
+    }
+  } catch {
+    // waiting for valid base URL
+  }
+}, { deep: true })
+
+
 function generateSlug() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let result = ''
@@ -222,15 +271,14 @@ const shortLinkPreview = computed(() => {
       <div class="mt-6 flex flex-col items-center gap-4">
         <p class="text-sm font-medium text-slate-600 dark:text-slate-400">QR Code</p>
         <DashboardQRCodeInline :slug="createdLink.slug" :size="160" />
-        <UButton
-          color="neutral"
-          variant="soft"
-          size="sm"
+        <button
+          type="button"
+          class="sy-success-qr-btn"
           @click="qrModalOpen = true"
         >
           <UIcon name="lucide:download" class="h-4 w-4" />
-          Download QR Code
-        </UButton>
+          <span>Download QR Code</span>
+        </button>
       </div>
 
       <div class="sy-success-actions">
@@ -334,6 +382,79 @@ const shortLinkPreview = computed(() => {
                   class="sy-input"
                   placeholder="Internal note (optional)"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UTM Builder Accordion -->
+      <div class="sy-accordion-card" :class="{ 'is-open': showUtmBuilder }">
+        <button
+          type="button"
+          class="sy-accordion-trigger"
+          @click="showUtmBuilder = !showUtmBuilder"
+        >
+          <div class="sy-accordion-trigger-left">
+            <div class="sy-accordion-icon" :class="showUtmBuilder ? 'is-active' : ''">
+              <UIcon name="lucide:split" class="h-4 w-4" />
+            </div>
+            <div>
+              <span class="sy-accordion-title">UTM Builder</span>
+              <span class="sy-accordion-desc">Add UTM parameters to track campaign performance</span>
+            </div>
+          </div>
+          <UIcon name="lucide:chevron-down" class="sy-accordion-chevron" :class="{ 'rotate-180': showUtmBuilder }" />
+        </button>
+        <div v-if="showUtmBuilder" class="sy-accordion-body">
+          <div class="space-y-3">
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:globe" class="h-4 w-4" />
+                <span>Source</span>
+              </div>
+              <input v-model="utm.source" type="text" class="sy-utm-input" placeholder="google" />
+            </div>
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:rss" class="h-4 w-4" />
+                <span>Medium</span>
+              </div>
+              <input v-model="utm.medium" type="text" class="sy-utm-input" placeholder="cpc" />
+            </div>
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:flag" class="h-4 w-4" />
+                <span>Campaign</span>
+              </div>
+              <input v-model="utm.campaign" type="text" class="sy-utm-input" placeholder="summer sale" />
+            </div>
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:text-search" class="h-4 w-4" />
+                <span>Term</span>
+              </div>
+              <input v-model="utm.term" type="text" class="sy-utm-input" placeholder="running shoes" />
+            </div>
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:file-text" class="h-4 w-4" />
+                <span>Content</span>
+              </div>
+              <input v-model="utm.content" type="text" class="sy-utm-input" placeholder="logo link" />
+            </div>
+            <div class="sy-utm-field">
+              <div class="sy-utm-label">
+                <UIcon name="lucide:gift" class="h-4 w-4" />
+                <span>Referral</span>
+              </div>
+              <input v-model="utm.referral" type="text" class="sy-utm-input" placeholder="yoursite.com" />
+            </div>
+
+            <div v-if="form.url" class="mt-5">
+              <h4 class="sy-utm-preview-header">URL Preview</h4>
+              <div class="sy-utm-preview-box">
+                {{ form.url }}
               </div>
             </div>
           </div>
