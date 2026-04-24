@@ -22,6 +22,16 @@ export default defineEventHandler(async (event) => {
       ADD COLUMN IF NOT EXISTS "redirect_timeout" bigint DEFAULT 3;
     `)
 
+    // 3. Add UTM columns to access_logs
+    await db.execute(sql`
+      ALTER TABLE "access_logs"
+      ADD COLUMN IF NOT EXISTS "utm_source" varchar(128),
+      ADD COLUMN IF NOT EXISTS "utm_medium" varchar(128),
+      ADD COLUMN IF NOT EXISTS "utm_campaign" varchar(128),
+      ADD COLUMN IF NOT EXISTS "utm_term" varchar(128),
+      ADD COLUMN IF NOT EXISTS "utm_content" varchar(128);
+    `)
+
     return { success: true, message: 'Database schema upgraded successfully!' }
   } catch (err: any) {
     return { success: false, error: err.message || 'Unknown error occurred during migration.' }

@@ -15,8 +15,15 @@ function buildFilterSql(filters: AnalyticsQuery): QueryFragment {
     values: [],
   }
 
-  fragment.values.push(filters.days)
-  fragment.where.push(`a.created_at >= NOW() - ($${fragment.values.length} * interval '1 day')`)
+  if (filters.start_date && filters.end_date) {
+    fragment.values.push(filters.start_date)
+    fragment.where.push(`a.created_at >= $${fragment.values.length}::timestamp`)
+    fragment.values.push(filters.end_date)
+    fragment.where.push(`a.created_at < $${fragment.values.length}::timestamp + interval '1 day'`)
+  } else {
+    fragment.values.push(filters.days || 30)
+    fragment.where.push(`a.created_at >= NOW() - ($${fragment.values.length} * interval '1 day')`)
+  }
 
   if (filters.slug) {
     fragment.values.push(filters.slug)
@@ -91,7 +98,7 @@ export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuer
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
-  const [devices, browsers, countries, operatingSystems, languages, timezones, referrers] = await Promise.all([
+  const [devices, browsers, countries, operatingSystems, languages, timezones, referrers, utmSources, utmMediums, utmCampaigns, utmTerms, utmContents] = await Promise.all([
     pool.query(
       `
         SELECT COALESCE(NULLIF(a.device_type, ''), 'unknown') AS label, COUNT(*)::int AS views
@@ -181,6 +188,66 @@ export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuer
       `,
       scope.values,
     ),
+    pool.query(
+      `
+        SELECT COALESCE(NULLIF(a.utm_source, ''), 'unknown') AS label, COUNT(*)::int AS views
+        FROM access_logs a
+        ${scope.joins}
+        ${scope.where}
+        GROUP BY 1
+        ORDER BY 2 DESC, 1 ASC
+        LIMIT 6
+      `,
+      scope.values,
+    ),
+    pool.query(
+      `
+        SELECT COALESCE(NULLIF(a.utm_medium, ''), 'unknown') AS label, COUNT(*)::int AS views
+        FROM access_logs a
+        ${scope.joins}
+        ${scope.where}
+        GROUP BY 1
+        ORDER BY 2 DESC, 1 ASC
+        LIMIT 6
+      `,
+      scope.values,
+    ),
+    pool.query(
+      `
+        SELECT COALESCE(NULLIF(a.utm_campaign, ''), 'unknown') AS label, COUNT(*)::int AS views
+        FROM access_logs a
+        ${scope.joins}
+        ${scope.where}
+        GROUP BY 1
+        ORDER BY 2 DESC, 1 ASC
+        LIMIT 6
+      `,
+      scope.values,
+    ),
+    pool.query(
+      `
+        SELECT COALESCE(NULLIF(a.utm_term, ''), 'unknown') AS label, COUNT(*)::int AS views
+        FROM access_logs a
+        ${scope.joins}
+        ${scope.where}
+        GROUP BY 1
+        ORDER BY 2 DESC, 1 ASC
+        LIMIT 6
+      `,
+      scope.values,
+    ),
+    pool.query(
+      `
+        SELECT COALESCE(NULLIF(a.utm_content, ''), 'unknown') AS label, COUNT(*)::int AS views
+        FROM access_logs a
+        ${scope.joins}
+        ${scope.where}
+        GROUP BY 1
+        ORDER BY 2 DESC, 1 ASC
+        LIMIT 6
+      `,
+      scope.values,
+    ),
   ])
 
   return {
@@ -191,6 +258,11 @@ export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuer
     languages: languages.rows,
     timezones: timezones.rows,
     referrers: referrers.rows,
+    utm_sources: utmSources.rows,
+    utm_mediums: utmMediums.rows,
+    utm_campaigns: utmCampaigns.rows,
+    utm_terms: utmTerms.rows,
+    utm_contents: utmContents.rows,
   }
 }
 

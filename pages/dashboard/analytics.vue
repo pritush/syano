@@ -36,6 +36,11 @@ type MetricsResponse = {
   languages: Array<{ label: string; views: number }>
   timezones: Array<{ label: string; views: number }>
   referrers: Array<{ label: string; views: number }>
+  utm_sources: Array<{ label: string; views: number }>
+  utm_mediums: Array<{ label: string; views: number }>
+  utm_campaigns: Array<{ label: string; views: number }>
+  utm_terms: Array<{ label: string; views: number }>
+  utm_contents: Array<{ label: string; views: number }>
 }
 
 type HeatmapResponse = {
@@ -71,7 +76,12 @@ type LocationsResponse = {
 const route = useRoute()
 const api = useDashboardApi()
 
-const days = ref('30')
+import { subDays, format } from 'date-fns'
+
+const dateRange = ref<{ start: Date; end: Date } | null>({
+  start: subDays(new Date(), 30),
+  end: new Date()
+})
 const slug = ref(typeof route.query.slug === 'string' ? route.query.slug : '')
 const selectedTagId = ref('')
 const loading = ref(true)
@@ -95,6 +105,11 @@ const metrics = ref<MetricsResponse>({
   languages: [],
   timezones: [],
   referrers: [],
+  utm_sources: [],
+  utm_mediums: [],
+  utm_campaigns: [],
+  utm_terms: [],
+  utm_contents: [],
 })
 const heatmap = ref<HeatmapResponse['items']>([])
 const events = ref<EventsResponse['items']>([])
@@ -102,6 +117,7 @@ const locations = ref<LocationsResponse['items']>([])
 
 const technologyTab = ref<'devices' | 'browsers' | 'operating_systems'>('devices')
 const locationTab = ref<'countries' | 'cities' | 'regions'>('countries')
+const acquisitionTab = ref<'referrers' | 'utm_sources' | 'utm_mediums' | 'utm_campaigns' | 'utm_terms' | 'utm_contents'>('referrers')
 const slugContext = computed(() => slug.value.trim() ? ` /${slug.value.trim()}` : '')
 
 const technologyTabs = [
@@ -114,6 +130,15 @@ const locationTabs = [
   { key: 'countries' as const, label: 'Countries' },
   { key: 'cities' as const, label: 'Cities' },
   { key: 'regions' as const, label: 'Regions' },
+]
+
+const acquisitionTabs = [
+  { key: 'referrers' as const, label: 'Referrers' },
+  { key: 'utm_sources' as const, label: 'Source' },
+  { key: 'utm_mediums' as const, label: 'Medium' },
+  { key: 'utm_campaigns' as const, label: 'Campaign' },
+  { key: 'utm_terms' as const, label: 'Term' },
+  { key: 'utm_contents' as const, label: 'Content' },
 ]
 
 const technologyItems = computed(() => {
@@ -130,11 +155,38 @@ const technologyTotal = computed(() => {
   return Math.max(1, technologyItems.value.reduce((sum, item) => sum + item.views, 0))
 })
 
+const acquisitionItems = computed(() => {
+  switch (acquisitionTab.value) {
+    case 'utm_sources': return metrics.value.utm_sources
+    case 'utm_mediums': return metrics.value.utm_mediums
+    case 'utm_campaigns': return metrics.value.utm_campaigns
+    case 'utm_terms': return metrics.value.utm_terms
+    case 'utm_contents': return metrics.value.utm_contents
+    case 'referrers':
+    default:
+      return metrics.value.referrers
+  }
+})
+
+const acquisitionTotal = computed(() => {
+  return Math.max(1, acquisitionItems.value.reduce((sum, item) => sum + item.views, 0))
+})
+
 function aggregateLocationBy(kind: 'country' | 'city' | 'region') {
   const bucket = new Map<string, number>()
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
 
   locations.value.forEach((item) => {
-    const raw = kind === 'country' ? item.country : kind === 'city' ? item.city : item.region
+    let raw = kind === 'country' ? item.country : kind === 'city' ? item.city : item.region
+    
+    if (kind === 'country' && raw && raw !== 'unknown') {
+      try {
+        raw = regionNames.of(raw) || raw
+      } catch (e) {
+        // Fallback to original code if invalid
+      }
+    }
+    
     const key = raw && raw !== 'unknown' ? raw : 'Unknown'
     bucket.set(key, (bucket.get(key) || 0) + item.views)
   })
@@ -177,7 +229,8 @@ function formatDate(value: string) {
 
 function queryParams() {
   return {
-    days: Number(days.value),
+    start_date: dateRange.value?.start ? format(dateRange.value.start, 'yyyy-MM-dd') : undefined,
+    end_date: dateRange.value?.end ? format(dateRange.value.end, 'yyyy-MM-dd') : undefined,
     slug: slug.value.trim() || undefined,
     tag_id: selectedTagId.value || undefined,
   }
@@ -218,7 +271,7 @@ async function loadAnalytics() {
   }
 }
 
-watch([days, selectedTagId], () => {
+watch([dateRange, selectedTagId], () => {
   loadAnalytics()
 })
 
@@ -271,16 +324,8 @@ onMounted(async () => {
       </template>
 
       <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,0.8fr)]">
-        <UFormField label="Days">
-          <SySelect
-            v-model="days"
-            :options="[
-              { label: 'Last 7 days', value: '7' },
-              { label: 'Last 30 days', value: '30' },
-              { label: 'Last 90 days', value: '90' }
-            ]"
-            buttonClass="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 transition-colors hover:border-brand-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-brand-600"
-          />
+        <UFormField label="Date Range">
+          <DashboardDateRangePicker v-model="dateRange" />
         </UFormField>
 
         <UFormField label="Slug filter">
@@ -484,6 +529,53 @@ onMounted(async () => {
 
         <div v-else class="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
           No location aggregates available yet.
+        </div>
+      </UCard>
+    </div>
+
+    <div class="grid gap-6">
+      <UCard class="sy-surface rounded-[28px] border-0">
+        <template #header>
+          <div class="space-y-3">
+            <h2 class="text-2xl font-semibold text-slate-950 dark:text-slate-100">
+              Acquisition
+            </h2>
+            <div class="inline-flex flex-wrap rounded-[24px] border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900 gap-1">
+              <button
+                v-for="tab in acquisitionTabs"
+                :key="tab.key"
+                type="button"
+                class="rounded-full px-4 py-1.5 text-sm font-semibold transition"
+                :class="acquisitionTab === tab.key ? 'bg-slate-900 text-white dark:bg-brand-500 dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'"
+                @click="acquisitionTab = tab.key"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="acquisitionItems.length" class="space-y-4 max-h-[360px] overflow-y-auto pr-2">
+          <div
+            v-for="item in acquisitionItems"
+            :key="item.label"
+            class="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-slate-700 dark:bg-slate-800/70"
+          >
+            <div class="mb-2 flex items-center justify-between gap-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <span class="truncate">{{ item.label }}</span>
+              <span>{{ item.views }}</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-700">
+              <div
+                class="h-2 rounded-full bg-brand-500"
+                :style="{ width: `${Math.max(8, (item.views / acquisitionTotal) * 100)}%` }"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+          No acquisition data yet.
         </div>
       </UCard>
     </div>

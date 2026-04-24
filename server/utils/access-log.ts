@@ -76,6 +76,8 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
   const deviceType = result.device.type || 'desktop'
   const [latitude, longitude] = geo?.ll || [null, null]
 
+  const query = getQuery(event)
+
   // Record standard access log
   await db.insert(access_logs).values({
     link_id: link.id,
@@ -96,10 +98,14 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
     device_type: deviceType,
     latitude: null, // REDACTED FOR PRIVACY
     longitude: null, // REDACTED FOR PRIVACY
+    utm_source: typeof query.utm_source === 'string' ? query.utm_source : null,
+    utm_medium: typeof query.utm_medium === 'string' ? query.utm_medium : null,
+    utm_campaign: typeof query.utm_campaign === 'string' ? query.utm_campaign : null,
+    utm_term: typeof query.utm_term === 'string' ? query.utm_term : null,
+    utm_content: typeof query.utm_content === 'string' ? query.utm_content : null,
   })
 
   // Track QR scans separately if parameter is present
-  const query = getQuery(event)
   if (query.r === 'qr') {
     await db.insert(qr_scans).values({
       link_id: link.id,

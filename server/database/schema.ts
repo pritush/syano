@@ -46,6 +46,11 @@ export const access_logs = pgTable('access_logs', {
   device_type: text('device_type'),
   latitude: doublePrecision('latitude').default(0),
   longitude: doublePrecision('longitude').default(0),
+  utm_source: varchar('utm_source', { length: 128 }),
+  utm_medium: varchar('utm_medium', { length: 128 }),
+  utm_campaign: varchar('utm_campaign', { length: 128 }),
+  utm_term: varchar('utm_term', { length: 128 }),
+  utm_content: varchar('utm_content', { length: 128 }),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
 
