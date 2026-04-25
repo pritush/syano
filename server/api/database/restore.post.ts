@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { usePool, useDrizzle } from '~/server/utils/db'
 import { links, tags, access_logs, site_settings } from '~/server/database/schema'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 const RestoreOptionsSchema = z.object({
   backup: z.object({
@@ -37,6 +39,7 @@ const RestoreOptionsSchema = z.object({
  * Restores database from backup JSON
  */
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.DATA_MANAGE)
   const body = await readBody(event)
   const validated = RestoreOptionsSchema.parse(body)
   

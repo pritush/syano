@@ -68,3 +68,14 @@ export const qr_scans = pgTable('qr_scans', {
   slug: varchar('slug', { length: 128 }),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
+
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  username: varchar('username', { length: 64 }).notNull().unique(),
+  display_name: varchar('display_name', { length: 120 }),
+  password_hash: text('password_hash').notNull(),
+  permissions: text('permissions').array().notNull().default([]),
+  is_active: boolean('is_active').default(true),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})

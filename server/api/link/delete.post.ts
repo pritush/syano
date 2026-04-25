@@ -2,8 +2,11 @@ import { createError, defineEventHandler, readBody } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { deleteLinkSchema } from '~/shared/schemas/link'
 import { deleteLink } from '~/server/utils/link-store'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.LINKS_DELETE)
   const runtimeConfig = useRuntimeConfig(event)
 
   if (runtimeConfig.public.previewMode) {

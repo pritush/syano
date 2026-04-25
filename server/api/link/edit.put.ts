@@ -1,8 +1,11 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { updateLinkSchema } from '~/shared/schemas/link'
 import { updateLink } from '~/server/utils/link-store'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.LINKS_EDIT)
   const body = await readBody(event)
   const parsed = updateLinkSchema.safeParse(body)
 

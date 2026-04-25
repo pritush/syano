@@ -1,8 +1,11 @@
 import { defineEventHandler } from 'h3'
 import { sql } from 'drizzle-orm'
 import { useDrizzle } from '~/server/utils/db'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.DATA_MANAGE)
   const db = await useDrizzle(event)
 
   try {
@@ -30,6 +33,25 @@ export default defineEventHandler(async (event) => {
       ADD COLUMN IF NOT EXISTS "utm_campaign" varchar(128),
       ADD COLUMN IF NOT EXISTS "utm_term" varchar(128),
       ADD COLUMN IF NOT EXISTS "utm_content" varchar(128);
+    `)
+
+    // 4. Create the users table for dashboard user management
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "username" varchar(64) NOT NULL UNIQUE,
+        "display_name" varchar(120),
+        "password_hash" text NOT NULL,
+        "permissions" text[] NOT NULL DEFAULT '{}',
+        "is_active" boolean DEFAULT true,
+        "created_at" timestamp with time zone DEFAULT now(),
+        "updated_at" timestamp with time zone DEFAULT now()
+      );
+    `)
+
+    // 5. Create index for users table
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     `)
 
     return { success: true, message: 'Database schema upgraded successfully!' }

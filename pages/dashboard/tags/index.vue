@@ -19,6 +19,7 @@ type TagItem = {
 
 const api = useDashboardApi()
 const toasts = useToasts()
+const { can } = useCurrentUser()
 
 const tags = ref<TagItem[]>([])
 const loadingTags = ref(true)
@@ -147,7 +148,7 @@ onMounted(loadTags)
 
     <div class="grid gap-6 lg:grid-cols-3">
       <!-- Create new tag -->
-      <UCard class="sy-surface rounded-[24px] border border-slate-200 shadow-sm dark:border-slate-800">
+      <UCard v-if="can('tags:manage')" class="sy-surface rounded-[24px] border border-slate-200 shadow-sm dark:border-slate-800">
         <template #header>
           <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
             Create Tag
@@ -165,7 +166,7 @@ onMounted(loadTags)
       </UCard>
 
       <!-- Manage existing tags -->
-      <UCard class="sy-surface rounded-[24px] border border-slate-200 shadow-sm lg:col-span-2 dark:border-slate-800">
+      <UCard class="sy-surface rounded-[24px] border border-slate-200 shadow-sm dark:border-slate-800" :class="can('tags:manage') ? 'lg:col-span-2' : 'lg:col-span-3'">
         <template #header>
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
@@ -202,6 +203,7 @@ onMounted(loadTags)
             </div>
             
             <UButton
+              v-if="can('tags:manage')"
               color="error"
               variant="soft"
               size="sm"

@@ -526,6 +526,187 @@ a {
   transform: scale(1.1);
 }
 
+/* ── Sidebar User Info ─────────────────────────── */
+
+.sy-sidebar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 0.8rem;
+  padding: 0.65rem 0.72rem;
+  margin-bottom: 0.35rem;
+  background: rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.1);
+}
+
+.dark .sy-sidebar-user-info {
+  background: rgba(20, 184, 166, 0.06);
+  border-color: rgba(20, 184, 166, 0.12);
+}
+
+.sy-sidebar-user-avatar {
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 9999px;
+  background: #0f766e;
+  color: #f8fafc;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.dark .sy-sidebar-user-avatar {
+  background: #14b8a6;
+  color: #042f2e;
+}
+
+.sy-sidebar-user-meta {
+  min-width: 0;
+}
+
+.sy-sidebar-user-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark .sy-sidebar-user-name {
+  color: #e2e8f0;
+}
+
+.sy-sidebar-user-role {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: -0.05rem;
+}
+
+.dark .sy-sidebar-user-role {
+  color: #94a3b8;
+}
+
+/* ── User Management ───────────────────────────── */
+
+.sy-user-card {
+  border-radius: 0.9rem;
+  border: 1px solid #d9e1ea;
+  background: #f8fafd;
+  padding: 1.15rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.sy-user-card:hover {
+  border-color: #bed5d3;
+  box-shadow: 0 4px 16px rgba(15, 118, 110, 0.08);
+}
+
+.dark .sy-user-card {
+  border-color: #243347;
+  background: #0f172a;
+}
+
+.dark .sy-user-card:hover {
+  border-color: rgba(20, 184, 166, 0.25);
+  box-shadow: 0 4px 16px rgba(20, 184, 166, 0.06);
+}
+
+.sy-permission-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.5rem;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #eef1f4;
+  color: #475569;
+  border: 1px solid #dbe2ea;
+  transition: all 150ms ease;
+}
+
+.dark .sy-permission-chip {
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+.sy-role-card {
+  border-radius: 0.9rem;
+  border: 2px solid #d9e1ea;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.sy-role-card:hover {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.04);
+}
+
+.sy-role-card.is-selected {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.06);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.2);
+}
+
+.dark .sy-role-card {
+  border-color: #243347;
+}
+
+.dark .sy-role-card:hover {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.04);
+}
+
+.dark .sy-role-card.is-selected {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.08);
+  box-shadow: 0 0 0 1px rgba(20, 184, 166, 0.2);
+}
+
+.sy-perm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 150ms ease;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.sy-perm-toggle:hover {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.02);
+}
+
+.sy-perm-toggle.is-active {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.dark .sy-perm-toggle {
+  border-color: #334155;
+}
+
+.dark .sy-perm-toggle:hover {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.04);
+}
+
+.dark .sy-perm-toggle.is-active {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.08);
+}
+
 /* ── Responsive Breakpoints ─────────────────────── */
 
 @media (min-width: 768px) {

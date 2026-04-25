@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS access_logs (
     device_type TEXT,
     latitude DOUBLE PRECISION DEFAULT 0,
     longitude DOUBLE PRECISION DEFAULT 0,
+    utm_source VARCHAR(128),
+    utm_medium VARCHAR(128),
+    utm_campaign VARCHAR(128),
+    utm_term VARCHAR(128),
+    utm_content VARCHAR(128),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -76,6 +81,18 @@ CREATE TABLE IF NOT EXISTS site_settings (
     bio_content JSONB
 );
 
+-- Users table for dashboard user management
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(64) NOT NULL UNIQUE,
+    display_name VARCHAR(120),
+    password_hash TEXT NOT NULL,
+    permissions TEXT[] NOT NULL DEFAULT '{}',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug);
 CREATE INDEX IF NOT EXISTS idx_links_tag_id ON links(tag_id);
@@ -84,6 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_access_logs_link_id ON access_logs(link_id);
 CREATE INDEX IF NOT EXISTS idx_access_logs_slug ON access_logs(slug);
 CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_logs_country ON access_logs(country);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 -- Composite indexes for common query patterns (Performance Optimization)
 CREATE INDEX IF NOT EXISTS idx_access_logs_link_created ON access_logs(link_id, created_at DESC);

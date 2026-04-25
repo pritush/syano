@@ -1,23 +1,25 @@
 <script setup lang="ts">
+definePageMeta({ layout: false })
+
 const route = useRoute()
-const { hydrate, isAuthenticated, setToken, setUsername, token } = useAuthToken()
+const { hydrate, isAuthenticated, setAuth } = useAuthToken()
 
 const draftUsername = ref('')
-const draftToken = ref('')
+const draftPassword = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
 hydrate()
-draftToken.value = token.value
 
 const redirectTarget = computed(() => {
   const raw = route.query.redirect
   return typeof raw === 'string' && raw.startsWith('/dashboard') ? raw : '/dashboard/links'
 })
 
-watchEffect(async () => {
+// If already authenticated, redirect immediately (e.g. user visits /login while logged in)
+onMounted(() => {
   if (isAuthenticated.value) {
-    await navigateTo(redirectTarget.value, { replace: true })
+    navigateTo(redirectTarget.value, { replace: true })
   }
 })
 
@@ -31,29 +33,40 @@ async function submit() {
     return
   }
 
-  if (!draftToken.value.trim()) {
-    errorMessage.value = 'Token is required.'
+  if (!draftPassword.value.trim()) {
+    errorMessage.value = 'Password is required.'
     loading.value = false
     return
   }
 
   try {
-    await $fetch('/api/link/list', {
-      query: { limit: 1 },
-      headers: {
-        authorization: `Bearer ${draftToken.value.trim()}`,
-        'x-site-user': draftUsername.value.trim(),
+    const result = await $fetch<{
+      token: string
+      user: {
+        id: string
+        username: string
+        displayName: string
+        permissions: string[]
+        isRoot: boolean
+      }
+    }>('/api/auth/login', {
+      method: 'POST',
+      body: {
+        username: draftUsername.value.trim(),
+        password: draftPassword.value.trim(),
       },
     })
 
-    // Set credentials immediately
-    setToken(draftToken.value)
-    setUsername(draftUsername.value)
-    
-    // Navigate without waiting for loading state to finish
-    navigateTo(redirectTarget.value, { replace: true })
+    // Set credentials in state + localStorage
+    setAuth(result.token, result.user)
+
+    // Hard navigation ensures clean hydration — avoids stale SSR state
+    // from racing with reactive watchers or middleware re-checks
+    if (import.meta.client) {
+      window.location.href = redirectTarget.value
+    }
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Invalid username or token.'
+    errorMessage.value = error?.data?.statusMessage || 'Invalid username or password.'
     loading.value = false
   }
 }
@@ -71,10 +84,10 @@ async function submit() {
 
         <div class="space-y-5">
           <h1 class="text-4xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-            Authenticate with your credentials.
+            Sign in to your dashboard.
           </h1>
           <p class="text-base leading-7 text-slate-600 dark:text-slate-400">
-            Syano keeps admin authentication intentionally simple, credentials can be changed or set via .env file.
+            Enter your username and password to access the Syano admin dashboard.
           </p>
 
         </div>
@@ -93,7 +106,7 @@ async function submit() {
         </template>
 
         <form class="space-y-5" @submit.prevent="submit">
-          <UFormField label="Username" description="The username set in NUXT_SITE_USER environment variable.">
+          <UFormField label="Username">
             <UInput
               v-model="draftUsername"
               type="text"
@@ -103,12 +116,12 @@ async function submit() {
             />
           </UFormField>
 
-          <UFormField label="Site token" description="The same token expected by the Authorization bearer header.">
+          <UFormField label="Password">
             <UInput
-              v-model="draftToken"
+              v-model="draftPassword"
               type="password"
               size="xl"
-              placeholder="Paste your site token"
+              placeholder="Enter your password"
               autocomplete="current-password"
             />
           </UFormField>
@@ -119,7 +132,7 @@ async function submit() {
 
           <div class="flex flex-wrap gap-3">
             <UButton type="submit" size="xl" :loading="loading">
-              Unlock dashboard
+              Sign in
             </UButton>
             <UButton to="/" color="neutral" variant="soft" size="xl">
               Back to homepage

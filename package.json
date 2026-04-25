@@ -18,11 +18,13 @@
     "@nuxt/icon": "2.2.1",
     "@nuxt/ui": "4.6.1",
     "@nuxtjs/color-mode": "^4.0.0",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "d3-geo": "^3.1.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.33.0",
     "geoip-lite": "^2.0.1",
+    "jose": "^6.2.2",
     "nuxt": "4.4.2",
     "pg": "^8.12.0",
     "qrcode": "^1.5.4",
@@ -34,6 +36,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/d3-geo": "^3.1.0",
     "@types/node": "^22.10.1",
     "@types/pg": "^8.11.10",

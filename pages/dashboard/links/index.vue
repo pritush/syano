@@ -14,6 +14,7 @@ useHead({
 const route = useRoute()
 const api = useDashboardApi()
 const toasts = useToasts()
+const { can } = useCurrentUser()
 
 type LinkRecord = {
   id: string
@@ -473,6 +474,7 @@ onMounted(async () => {
             </a>
 
             <button
+              v-if="can('links:edit')"
               type="button"
               class="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
               title="Edit"
@@ -483,6 +485,7 @@ onMounted(async () => {
             </button>
 
             <button
+              v-if="can('links:delete')"
               type="button"
               class="group inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-red-200 bg-red-50/70 text-red-600 transition-all duration-200 hover:border-red-300 hover:bg-red-100 hover:shadow-sm dark:border-red-800 dark:bg-red-950/30 dark:text-red-400 dark:hover:border-red-700 dark:hover:bg-red-900/40"
               title="Delete"

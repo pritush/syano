@@ -1,44 +1,40 @@
-const AUTH_STORAGE_KEY = 'syano.site-token'
-const USER_STORAGE_KEY = 'syano.site-user'
+const AUTH_STORAGE_KEY = 'syano.auth-token'
+const USER_STORAGE_KEY = 'syano.auth-user'
+
+export interface AuthUserInfo {
+  id: string
+  username: string
+  displayName: string
+  permissions: string[]
+  isRoot: boolean
+}
 
 export function useAuthToken() {
   const token = useState<string>('syano-auth-token', () => '')
-  const username = useState<string>('syano-auth-username', () => '')
+  const user = useState<AuthUserInfo | null>('syano-auth-user', () => null)
   const hydrated = useState<boolean>('syano-auth-token-hydrated', () => false)
 
   function hydrate() {
     if (import.meta.client && !hydrated.value) {
-      // Batch localStorage reads for better performance
       const storedToken = window.localStorage.getItem(AUTH_STORAGE_KEY) || ''
-      const storedUser = window.localStorage.getItem(USER_STORAGE_KEY) || ''
-      
+      const storedUser = window.localStorage.getItem(USER_STORAGE_KEY)
+
       token.value = storedToken
-      username.value = storedUser
+      user.value = storedUser ? JSON.parse(storedUser) : null
       hydrated.value = true
     }
   }
 
-  function setToken(value: string) {
-    const nextValue = value.trim()
-    token.value = nextValue
+  function setAuth(newToken: string, newUser: AuthUserInfo) {
+    token.value = newToken.trim()
+    user.value = newUser
 
     if (import.meta.client) {
-      if (nextValue) {
-        window.localStorage.setItem(AUTH_STORAGE_KEY, nextValue)
+      if (token.value) {
+        window.localStorage.setItem(AUTH_STORAGE_KEY, token.value)
+        window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser))
       } else {
         window.localStorage.removeItem(AUTH_STORAGE_KEY)
-      }
-    }
-  }
-
-  function setUsername(value: string) {
-    const nextValue = value.trim()
-    username.value = nextValue
-
-    if (import.meta.client) {
-      if (nextValue) {
-        window.localStorage.setItem(USER_STORAGE_KEY, nextValue)
-      } else {
         window.localStorage.removeItem(USER_STORAGE_KEY)
       }
     }
@@ -46,10 +42,9 @@ export function useAuthToken() {
 
   function clearToken() {
     token.value = ''
-    username.value = ''
-    
+    user.value = null
+
     if (import.meta.client) {
-      // Batch localStorage operations
       window.localStorage.removeItem(AUTH_STORAGE_KEY)
       window.localStorage.removeItem(USER_STORAGE_KEY)
     }
@@ -62,12 +57,26 @@ export function useAuthToken() {
 
   return {
     token,
-    username,
-    isAuthenticated: computed(() => Boolean(token.value && username.value)),
+    user,
+    // Legacy compat — username derived from user object
+    username: computed(() => user.value?.username || ''),
+    isAuthenticated: computed(() => Boolean(token.value && user.value)),
     hydrate,
-    setToken,
-    setUsername,
+    setAuth,
     clearToken,
+    // Legacy methods mapped for backwards compat
+    setToken: (value: string) => {
+      token.value = value.trim()
+      if (import.meta.client) {
+        if (value.trim()) {
+          window.localStorage.setItem(AUTH_STORAGE_KEY, value.trim())
+        } else {
+          window.localStorage.removeItem(AUTH_STORAGE_KEY)
+        }
+      }
+    },
+    setUsername: (_value: string) => {
+      // No-op — username now comes from user object
+    },
   }
 }
-

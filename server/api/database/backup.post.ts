@@ -1,11 +1,14 @@
 import { z } from 'zod'
 import { usePool } from '~/server/utils/db'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 /**
  * Full Database Backup
  * Exports all tables (links, tags, access_logs, site_settings) as JSON
  */
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.DATA_MANAGE)
   const pool = await usePool(event)
 
   try {

@@ -1,8 +1,11 @@
 import { defineEventHandler } from 'h3'
 import { sql } from 'drizzle-orm'
 import { useDrizzle } from '~/server/utils/db'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.DATA_MANAGE)
   const db = await useDrizzle(event)
 
   try {
@@ -30,13 +33,22 @@ export default defineEventHandler(async (event) => {
     `)
     const hasUtm = utmCheck.rows[0]?.exists
 
+    const usersCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'users'
+      );
+    `)
+    const hasUsers = usersCheck.rows[0]?.exists
+
     const missing = []
     if (!hasQrScans) missing.push('New table for tracking QR code scans')
     if (!hasTimeout) missing.push('New redirect delay configuration field')
     if (!hasUtm) missing.push('Analytics UTM parameters tracking')
+    if (!hasUsers) missing.push('Users table for dashboard user management')
 
     return {
-      upToDate: hasQrScans && hasTimeout && hasUtm,
+      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers,
       missing
     }
   } catch (err: any) {

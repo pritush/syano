@@ -1,8 +1,11 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { SiteSettingsSchema } from '~/shared/schemas/settings'
 import { saveSiteSettings } from '~/server/utils/site-settings'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.SETTINGS_MANAGE)
   const body = await readBody(event)
   const parsed = SiteSettingsSchema.safeParse(body)
 

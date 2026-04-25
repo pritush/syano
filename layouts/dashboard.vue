@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { PERMISSIONS } from '~/shared/permissions'
+
 const route = useRoute()
-const { clearToken } = useAuthToken()
+const { clearToken, user } = useAuthToken()
+const { isRoot, can } = useCurrentUser()
 const colorMode = useColorMode()
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
@@ -11,36 +14,58 @@ useHead({
   },
 })
 
-const navigation = [
-  {
-    label: 'Links',
-    to: '/dashboard/links',
-    icon: 'lucide:link-2',
-  },
-  {
-    label: 'Analytics',
-    to: '/dashboard/analytics',
-    icon: 'lucide:chart-column',
-  },
-  {
-    label: 'Tags',
-    to: '/dashboard/tags',
-    icon: 'lucide:tags',
-  },
+const navigation = computed(() => {
+  const items = [
+    {
+      label: 'Links',
+      to: '/dashboard/links',
+      icon: 'lucide:link-2',
+      show: true,
+    },
+    {
+      label: 'Analytics',
+      to: '/dashboard/analytics',
+      icon: 'lucide:chart-column',
+      show: true,
+    },
+    {
+      label: 'Tags',
+      to: '/dashboard/tags',
+      icon: 'lucide:tags',
+      show: true,
+    },
+    {
+      label: 'Homepage Settings',
+      to: '/dashboard/settings',
+      icon: 'lucide:settings-2',
+      show: isRoot.value || can(PERMISSIONS.SETTINGS_MANAGE),
+    },
+    {
+      label: 'User Management',
+      to: '/dashboard/users',
+      icon: 'lucide:users',
+      show: isRoot.value,
+    },
+    {
+      label: 'Data Ops',
+      to: '/dashboard/migrate',
+      icon: 'lucide:database',
+      show: isRoot.value,
+    },
+  ]
 
-  {
-    label: 'Homepage Settings',
-    to: '/dashboard/settings',
-    icon: 'lucide:settings-2',
-  },
+  return items.filter(item => item.show)
+})
 
-  {
-    label: 'Data Ops',
-    to: '/dashboard/migrate',
-    icon: 'lucide:database',
-  },
-
-] as const
+const userInitials = computed(() => {
+  if (!user.value) return 'SY'
+  const name = user.value.displayName || user.value.username
+  const parts = name.split(/[\s._-]+/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
+})
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(`${path}/`)
@@ -196,6 +221,17 @@ watch(isMobile, (mobile) => {
       </nav>
 
       <div class="mt-auto space-y-2 pt-5">
+        <!-- Current user info -->
+        <div v-if="user && !sidebarCollapsed" class="sy-sidebar-user-info">
+          <div class="sy-sidebar-user-avatar">
+            {{ userInitials }}
+          </div>
+          <div class="sy-sidebar-user-meta">
+            <p class="sy-sidebar-user-name">{{ user.displayName || user.username }}</p>
+            <p class="sy-sidebar-user-role">{{ user.isRoot ? 'Root Admin' : 'User' }}</p>
+          </div>
+        </div>
+
         <UTooltip
           text="Help"
           :popper="{ placement: 'right' }"
@@ -277,7 +313,7 @@ watch(isMobile, (mobile) => {
           </button>
 
           <button type="button" class="sy-dashboard-avatar" aria-label="Profile">
-            <span>SY</span>
+            <span>{{ userInitials }}</span>
           </button>
         </div>
       </header>

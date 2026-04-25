@@ -1,8 +1,11 @@
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { analyticsQuerySchema } from '~/shared/schemas/analytics'
 import { getAnalyticsCounters } from '~/server/utils/analytics'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.ANALYTICS_READ)
   const parsed = analyticsQuerySchema.safeParse(getQuery(event))
 
   if (!parsed.success) {

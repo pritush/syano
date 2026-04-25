@@ -2,8 +2,11 @@ import { createError, defineEventHandler, readBody } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { createImportLinksSchema } from '~/shared/schemas/import-export'
 import { importLinks } from '~/server/utils/link-store'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.LINKS_CREATE)
   const runtimeConfig = useRuntimeConfig(event)
   const parsed = createImportLinksSchema(runtimeConfig.public.slugDefaultLength).safeParse(await readBody(event))
 

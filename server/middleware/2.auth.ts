@@ -1,13 +1,14 @@
-import { createError, defineEventHandler, getHeader, getRequestURL } from 'h3'
-import { useRuntimeConfig } from '#imports'
+import { createError, defineEventHandler, getRequestURL } from 'h3'
+import { getAuthUser } from '~/server/utils/auth'
 
-export default defineEventHandler((event) => {
+export default defineEventHandler(async (event) => {
   const pathname = getRequestURL(event).pathname
 
   if (!pathname.startsWith('/api/')) {
     return
   }
 
+  // Public routes — no auth needed
   if (pathname === '/api/settings' && (event.method || 'GET') === 'GET') {
     return
   }
@@ -22,17 +23,21 @@ export default defineEventHandler((event) => {
     return
   }
 
-  const runtimeConfig = useRuntimeConfig(event)
-  const authorization = getHeader(event, 'authorization') || ''
-  const username = getHeader(event, 'x-site-user') || ''
-  
-  const expectedToken = `Bearer ${runtimeConfig.siteToken}`
-  const expectedUser = runtimeConfig.siteUser
+  // Login endpoint must be public
+  if (pathname === '/api/auth/login') {
+    return
+  }
 
-  if (authorization !== expectedToken || username !== expectedUser) {
+  // Verify authentication (JWT or legacy token)
+  const user = await getAuthUser(event)
+
+  if (!user) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Unauthorized',
     })
   }
+
+  // Attach user to event context for downstream handlers
+  event.context.auth = user
 })

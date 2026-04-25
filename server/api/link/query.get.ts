@@ -1,8 +1,11 @@
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { queryLinkSchema } from '~/shared/schemas/link'
 import { getLink } from '~/server/utils/link-store'
+import { requirePermission } from '~/server/utils/auth'
+import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
+  await requirePermission(event, PERMISSIONS.LINKS_READ)
   const parsed = queryLinkSchema.safeParse(getQuery(event))
 
   if (!parsed.success) {
