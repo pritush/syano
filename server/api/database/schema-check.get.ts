@@ -41,14 +41,23 @@ export default defineEventHandler(async (event) => {
     `)
     const hasUsers = usersCheck.rows[0]?.exists
 
+    const auditLogsCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'audit_logs'
+      );
+    `)
+    const hasAuditLogs = auditLogsCheck.rows[0]?.exists
+
     const missing = []
     if (!hasQrScans) missing.push('New table for tracking QR code scans')
     if (!hasTimeout) missing.push('New redirect delay configuration field')
     if (!hasUtm) missing.push('Analytics UTM parameters tracking')
     if (!hasUsers) missing.push('Users table for dashboard user management')
+    if (!hasAuditLogs) missing.push('Audit logs table for compliance and security tracking')
 
     return {
-      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers,
+      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs,
       missing
     }
   } catch (err: any) {

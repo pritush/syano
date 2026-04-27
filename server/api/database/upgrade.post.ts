@@ -54,6 +54,36 @@ export default defineEventHandler(async (event) => {
       CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     `)
 
+    // 6. Create the audit_logs table for compliance and security tracking
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "audit_logs" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "actor_id" varchar(64) NOT NULL,
+        "actor_username" varchar(128) NOT NULL,
+        "action" varchar(32) NOT NULL,
+        "entity_type" varchar(32) NOT NULL,
+        "entity_id" varchar(128),
+        "entity_label" varchar(256),
+        "details" jsonb,
+        "ip" inet,
+        "created_at" timestamp with time zone DEFAULT now()
+      );
+    `)
+
+    // 7. Create indexes for audit_logs table
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+    `)
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+    `)
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type);
+    `)
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
+    `)
+
     return { success: true, message: 'Database schema upgraded successfully!' }
   } catch (err: any) {
     return { success: false, error: err.message || 'Unknown error occurred during migration.' }

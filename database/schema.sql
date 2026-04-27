@@ -4,9 +4,6 @@
 -- This script creates all necessary tables for the Syano URL shortener
 -- Run this script on a fresh PostgreSQL database
 
--- Enable UUID extension (if not already enabled)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Tags table for organizing links
 CREATE TABLE IF NOT EXISTS tags (
     id VARCHAR(64) PRIMARY KEY NOT NULL,
@@ -37,7 +34,7 @@ CREATE TABLE IF NOT EXISTS links (
 
 -- Access logs table for analytics
 CREATE TABLE IF NOT EXISTS access_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     link_id VARCHAR(64) REFERENCES links(id) ON DELETE SET NULL,
     slug VARCHAR(128),
     url TEXT,
@@ -66,7 +63,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
 
 -- QR scans tracking table
 CREATE TABLE IF NOT EXISTS qr_scans (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     link_id VARCHAR(64) REFERENCES links(id) ON DELETE CASCADE,
     slug VARCHAR(128),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -83,7 +80,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
 
 -- Users table for dashboard user management
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(64) NOT NULL UNIQUE,
     display_name VARCHAR(120),
     password_hash TEXT NOT NULL,
@@ -95,7 +92,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Audit logs table for immutable action tracking
 CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id VARCHAR(64) NOT NULL,
     actor_username VARCHAR(128) NOT NULL,
     action VARCHAR(32) NOT NULL,

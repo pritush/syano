@@ -85,18 +85,10 @@ async function checkAndCreateAuditLogsTable() {
 
     console.log('⚠️  audit_logs table does not exist. Creating...')
 
-    // Enable uuid-ossp extension if not already enabled
-    try {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-      console.log('✅ uuid-ossp extension enabled')
-    } catch (extError) {
-      console.warn('⚠️  Could not enable uuid-ossp extension (may already exist or lack permissions)')
-    }
-
-    // Create the table
+    // Create the table using gen_random_uuid() (PostgreSQL 13+)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         actor_id VARCHAR(64) NOT NULL,
         actor_username VARCHAR(128) NOT NULL,
         action VARCHAR(32) NOT NULL,
