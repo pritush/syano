@@ -5,6 +5,7 @@ import { useDrizzle } from '~/server/utils/db'
 import { users } from '~/server/database/schema'
 import { PERMISSIONS } from '~/shared/permissions'
 import type { AuthUser } from '~/server/utils/auth'
+import { recordAudit } from '~/server/utils/audit-log'
 
 export default defineEventHandler(async (event) => {
   const authUser = await requirePermission(event, PERMISSIONS.USERS_MANAGE) as AuthUser
@@ -26,6 +27,14 @@ export default defineEventHandler(async (event) => {
 
   const db = await useDrizzle(event)
   await db.delete(users).where(eq(users.id, id))
+
+  recordAudit(event, {
+    actor: authUser,
+    action: 'delete',
+    entityType: 'user',
+    entityId: existing.id,
+    entityLabel: existing.username,
+  })
 
   return { ok: true, username: existing.username }
 })

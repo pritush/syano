@@ -4,9 +4,10 @@ import { useDrizzle } from '~/server/utils/db'
 import { users } from '~/server/database/schema'
 import { createUserSchema } from '~/shared/schemas/user'
 import { PERMISSIONS } from '~/shared/permissions'
+import { recordAudit } from '~/server/utils/audit-log'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, PERMISSIONS.USERS_MANAGE)
+  const actor = await requirePermission(event, PERMISSIONS.USERS_MANAGE)
 
   const body = await readBody(event)
   const parsed = createUserSchema.safeParse(body)
@@ -55,6 +56,15 @@ export default defineEventHandler(async (event) => {
     permissions: users.permissions,
     isActive: users.is_active,
     createdAt: users.created_at,
+  })
+
+  recordAudit(event, {
+    actor,
+    action: 'create',
+    entityType: 'user',
+    entityId: created.id,
+    entityLabel: created.username,
+    details: { permissions: created.permissions },
   })
 
   return created

@@ -5,9 +5,10 @@ import { useDrizzle } from '~/server/utils/db'
 import { users } from '~/server/database/schema'
 import { updateUserSchema } from '~/shared/schemas/user'
 import { PERMISSIONS } from '~/shared/permissions'
+import { recordAudit } from '~/server/utils/audit-log'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, PERMISSIONS.USERS_MANAGE)
+  const actor = await requirePermission(event, PERMISSIONS.USERS_MANAGE)
 
   const id = getRouterParam(event, 'id')
   if (!id) {
@@ -65,6 +66,22 @@ export default defineEventHandler(async (event) => {
       createdAt: users.created_at,
       updatedAt: users.updated_at,
     })
+
+  // Build a summary of what changed for the audit details
+  const changedFields: string[] = []
+  if (parsed.data.displayName !== undefined) changedFields.push('displayName')
+  if (parsed.data.permissions !== undefined) changedFields.push('permissions')
+  if (parsed.data.isActive !== undefined) changedFields.push('isActive')
+  if (parsed.data.password) changedFields.push('password')
+
+  recordAudit(event, {
+    actor,
+    action: 'update',
+    entityType: 'user',
+    entityId: updated.id,
+    entityLabel: updated.username,
+    details: { changedFields },
+  })
 
   return updated
 })

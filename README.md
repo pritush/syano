@@ -1,89 +1,211 @@
-# Syano - Free Open-Source URL Shortener
+# Syano - Self-Hosted URL Shortener | Open Source Link Management Platform
 
 <div align="center">
 
-![Syano Logo](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/ae5d11ccf2a3ed0620ec288ecc6d8a1ac14f3be1/uploads/2026-04-12T11-34-35-368Z-fx4qdk2mo.png)
+![Syano - Open Source URL Shortener](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/ae5d11ccf2a3ed0620ec288ecc6d8a1ac14f3be1/uploads/2026-04-12T11-34-35-368Z-fx4qdk2mo.png)
 
-**A powerful, self-hosted URL shortener with analytics and link-in-bio pages. The free Bitly alternative.**
+**Syano is a powerful self-hosted URL shortener and open source link management platform, ready for enterprise implementation. Take complete control of your short links with advanced analytics, QR codes, link-in-bio pages, and enterprise-grade features. The best Bitly alternative for privacy-conscious teams.**
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-%3E%3D14-blue.svg)](https://www.postgresql.org)
-[![Nuxt](https://img.shields.io/badge/nuxt-3.x-00DC82.svg)](https://nuxt.com)
+[![Nuxt 3](https://img.shields.io/badge/nuxt-3.x-00DC82.svg)](https://nuxt.com)
+[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg)](https://www.docker.com)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Deploy](#-deployment) • [Docs](#-documentation)
+[Features](#-features) • [Quick Start](#-quick-start) • [Deploy](#-deployment-options) • [Documentation](#-documentation) • [Demo](#-live-demo)
 
-<a href="https://www.producthunt.com/products/syano-opensource-url-shortener?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-syano-opensource-url-shortener" target="_blank" rel="noopener noreferrer"><img alt="Syano - Opensource URL shortener - url shortener, link shortener, bitly alternative | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1121910&theme=light&t=1776003459663"></a>
+<a href="https://www.producthunt.com/products/syano-opensource-url-shortener" target="_blank"><img alt="Syano - Open Source URL Shortener | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1121910&theme=light"></a>
 
 </div>
 
 ---
 
-## 🌟 Why Syano?
+## 🌟 Why Choose Syano as Your Self-Hosted URL Shortener?
 
-Syano is a free, open-source URL shortener that gives you complete control over your links and data. Unlike Bitly, your data stays on your server with no tracking or limitations.
+Most URL shorteners lock you into their ecosystem — your links, your data, and your analytics are controlled by someone else. **Syano is different.** As a fully open source URL shortener, you own everything.
 
-- 🔒 **Privacy First** - Your data stays on your server
-- 🚀 **Fast & Reliable** - Optimized for performance
-- 🎨 **Beautiful UI** - Modern design with dark mode
-- 📊 **Analytics** - Track clicks, geography, and referrers
-- 🔧 **Easy Setup** - Deploy in minutes
-- 💰 **Free & Opensource** - AGPL-3.0 licensed
+### The Problem with Cloud URL Shorteners
+- 🚫 Your links can disappear if the service shuts down
+- 🚫 Analytics data is sold to third parties
+- 🚫 Pricing changes can break your budget
+- 🚫 Limited customization and branding
+- 🚫 No control over uptime and performance
 
----
-
-## ✨ Features
-
-### Core Features
-- **Custom Short Links** - Create memorable URLs with custom slugs
-- **Link Organization** - Organize with tags and comments
-- **QR Codes Generation** - Generate QR Codes of URL and also collect scan data.
-- **Search & Filter** - Find links quickly
-- **Link Expiration** - Set automatic expiration dates
-- **Password Protection** - Secure sensitive links
-- **Device Targeting** - Different URLs for iOS/Android
-- **Bulk Import/Export** - Import thousands of links from JSON
-
-### Analytics & Tracking
-- **Real-time Analytics** - Track clicks as they happen
-- **Geographic Data** - Interactive world map with country/city data
-- **Device Insights** - OS, browser, and device breakdown
-- **Referrer Tracking** - See where traffic comes from
-
-### Link-in-Bio
-- **Beautiful Bio Pages** - Customizable link-in-bio like Linktree
-- **Profile Customization** - Name, bio, avatar, and social links
-- **Share Profile** - One-click sharing
-
+### The Syano Solution: Self-Hosted URL Shortener
+- ✅ **Complete Data Ownership** - Your links, your server, your rules
+- ✅ **Privacy-First Architecture** - No tracking, no data selling
+- ✅ **Zero Recurring Costs** - One-time setup, unlimited links forever
+- ✅ **Enterprise Features** - Multi-user access, audit logs, advanced analytics
+- ✅ **Deploy Anywhere** - Vercel, Netlify, Docker, VPS, or your own infrastructure
+- ✅ **Open Source Forever** - AGPL-3.0 licensed, community-driven development
 
 ---
 
-## Screenshots
-![Syano screenshot](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/fcc6b6fcde2624a3cc5d80c0b25325b554c349a4/uploads/2026-04-12T11-39-00-437Z-06pwoe4r7.jpg)
+## ✨ Complete Feature Set
 
-### Demo
-Netlify+NeonDB
-https://syano.netlify.app/
+Syano isn't just a URL shortener — it's a comprehensive link management platform designed for teams, marketers, and developers who need professional-grade tools without the SaaS price tag.
 
-Help collect more samples:
-https://syano.netlify.app/gmap 
-https://syano.netlify.app/smo5r
-https://syano.netlify.app/jubfz
-https://syano.netlify.app/klcvx
-https://syano.netlify.app/84jdnh
-https://syano.netlify.app/klcvx
-https://syano.netlify.app/4gxp72
+### 🔗 Advanced Link Management
+
+**Smart URL Shortening**
+- Custom slugs or auto-generated short links
+- Live preview before saving
+- Bulk import/export (JSON format)
+- Real-time search across all link metadata
+- Tag-based organization and filtering
+
+**Marketing & Campaign Tools**
+- Built-in UTM parameter builder
+- Link expiration scheduling
+- Password-protected links
+- Device-specific targeting (iOS/Android)
+- Link cloaking with iframe embedding
+- Custom redirect status codes (301/302/307)
+
+**Link Organization**
+- Hierarchical tag system
+- Internal comments and notes
+- Advanced search and filtering
+- Sort by clicks, date, or custom criteria
+- Batch import
+
+### 📊 Professional Analytics Dashboard
+
+**Analytics**
+- Analytics for each link
+- 24-hour and 7-day trend analysis and customer date range
+- Export analytics data (CSV/JSON)
+
+**Geographic Intelligence**
+- Country, region, and city-level tracking
+- Interactive world map visualization
+- QR Scan Analytics
+- Acquisition
+
+**Technology Analytics**
+- Browser and browser version tracking
+- Operating system detection
+- Device type classification (mobile/tablet/desktop)
+
+**Marketing Attribution**
+- Full UTM parameter tracking
+- Referrer source analysis
+- Acquisition channel breakdown
+
+**Behavioral Analytics**
+- Activity heatmap (day × hour)
+- Peak traffic time identification
+- Click pattern analysis
+- Recent events feed with real-time updates
+- QR code scan tracking (separate from web clicks)
+
+### 🎨 QR Code Generator
+
+**Professional QR Codes**
+- Instant QR code generation for every link
+- SVG format (scalable, print-ready)
+- PNG export for digital use
+- Server-side rendering with 7-day caching
+- Automatic QR scan tracking
+
+**Use Cases**
+- Print marketing materials
+- Event tickets and badges
+- Product packaging
+- Restaurant menus
+- Business cards
+
+### 🌐 Link-in-Bio Pages
+
+**Personal Landing Pages**
+- Customizable bio page on your home page
+- Profile photo and initials
+- Bio text and description
+- Unlimited custom links
+- Social media icon row (20+ platforms)
+
+**Link Customization**
+- Custom titles and subtitles
+- Icon selection from curated library
+- Color accent customization
+- Drag-and-drop reordering
+- Show/hide individual links
+
+**Homepage Modes**
+- Default Syano landing page
+- Custom redirect with delay
+- Link-in-bio page
+- Instant switching via dashboard
+
+### 👥 Multi-User & Team Management
+
+**User Access Control**
+- Unlimited dashboard users
+- Individual user accounts with secure authentication
+- Enable/disable users without deletion
+- User activity tracking in audit logs
+
+**Granular Permission System**
+- 4 preset roles: Viewer, Editor, Manager, Admin
+- 10+ individual permissions
+- Custom permission combinations
+- Role-based access control (RBAC)
+- Permission inheritance
+
+**Permissions Include:**
+- Link creation, editing, deletion
+- Analytics viewing
+- Tag management
+- User management
+- Import/export operations
+- Settings modification
+- Audit log access (super-amin only)
 
 
+### ⚡ Performance & Infrastructure
 
-## 🚀 Quick Start
+
+**Supported Databases:**
+- PostgreSQL (local or self-hosted)
+- Neon (serverless PostgreSQL)
+- Supabase (PostgreSQL as a service)
+- Aiven (managed PostgreSQL)
+- AWS RDS, Google Cloud SQL, Azure Database
+- Docker PostgreSQL containers
+
+### 🎨 User Experience
+
+**Modern Interface**
+- Clean, intuitive dashboard
+- Full dark mode support
+- Responsive design (mobile, tablet, desktop)
+- Keyboard shortcuts
+- Real-time updates
+
+**Developer Experience**
+- TypeScript throughout
+- Type-safe database queries (Drizzle ORM)
+- Comprehensive API documentation
+- Easy local development setup
+- Hot module replacement
+- Detailed error messages
+- One click database update
+
+---
+
+## 🚀 Quick Start Guide
+
+Get your self-hosted URL shortener running in under 5 minutes.
 
 ### Prerequisites
-- **Node.js** 18+
-- **PostgreSQL** 14+
-- **pnpm** or npm
 
-### 1. Clone & Install
+- **Node.js** 18 or higher
+- **PostgreSQL** 14 or higher
+- **pnpm** (recommended) or npm
+
+### Installation Steps
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/pritush/syano.git
@@ -91,127 +213,282 @@ cd syano
 pnpm install
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` with your configuration:
+
 ```env
-NUXT_DATABASE_URL=postgresql://user:password@host:5432/database
-NUXT_SITE_TOKEN=your-secure-random-token
+# Database Connection
+# For serverless (Netlify/Vercel): Use Neon pooled connection
+DATABASE_URL=postgresql://user:pass@project-pooler.neon.tech/db?sslmode=require
+
+# For traditional servers (VPS/Docker): Use direct connection
+# DATABASE_URL=postgresql://user:pass@localhost:5432/syano
+
+# Authentication
+NUXT_SITE_TOKEN=your-secure-random-token-here
 NUXT_SITE_USER=root
+
+# Optional: Connection Pool Tuning
+# DB_POOL_MAX=20
+# DB_POOL_MIN=2
+
+# Optional: Application Settings
+# NUXT_CACHE_TTL=30
+# NUXT_REDIRECT_STATUS_CODE=301
+# NUXT_PUBLIC_SLUG_DEFAULT_LENGTH=6
 ```
 
-### 3. Set Up Database
+#### 3. Set Up Database
 
+**Option A: Local PostgreSQL**
 ```bash
-# Create database
 createdb syano
-
-# Import schema
 psql -d syano -f database/schema.sql
 ```
 
-### 4. Start Development
-
-```bash
-pnpm dev
-```
-
-Visit **http://localhost:7466** and login with your token.
-
----
-
-## 📦 Database Setup
-
-### Supported Databases
-- ✅ **Local** - PostgreSQL, Node, Docker
-- ✅ **Supabase** - Serverless PostgreSQL
-- ✅ **Neon** - Serverless PostgreSQL
-- ✅ **Aiven** - Serverless  PostgreSQL
-- ✅ **Self-hosted** - Any PostgreSQL instance
-
-### Using Docker
-
+**Option B: Docker PostgreSQL**
 ```bash
 docker run -d \
   --name syano-db \
   -e POSTGRES_PASSWORD=password \
   -e POSTGRES_DB=syano \
   -p 5432:5432 \
-  postgres:14
+  postgres:16-alpine
 
 docker exec -i syano-db psql -U postgres -d syano < database/schema.sql
 ```
 
----
+**Option C: Cloud Database (Neon, Supabase)**
+```bash
+# Copy the SQL from database/schema.sql and run it in your cloud database console
+# Or use psql with your cloud connection string
+psql -d "your-cloud-connection-string" -f database/schema.sql
+```
 
-## 🚀 Deployment
+**Verify Database Setup:**
+```bash
+pnpm run db:check-audit
+```
 
-### Vercel
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pritush/syano)
-
-### Netlify
+#### 4. Start Development Server
 
 ```bash
-npm i -g netlify-cli
+pnpm dev
+```
+
+Visit **http://localhost:7466** and login with your `NUXT_SITE_TOKEN`.
+
+---
+
+## 🌐 Deployment Options
+
+Deploy your self-hosted URL shortener to any platform in minutes.
+
+### Serverless Platforms (Recommended)
+
+#### Netlify
+```bash
+# Install Netlify CLI
+npm install -g netlify-cli
+
+# Deploy
+pnpm run build
 netlify deploy --prod
 ```
 
-### Self-Hosted
-Deploy on any server with Node.js and PostgreSQL support.
+**Environment Variables:**
+- `DATABASE_URL` - Use Neon pooled connection (`-pooler` suffix)
+- `NUXT_SITE_TOKEN` - Your secure token
+- `NUXT_SITE_USER` - Admin username (default: root)
 
----
+#### Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pritush/syano)
 
-## 🛠️ Tech Stack
+**Automatic Optimizations:**
+- Connection pooling (1-3 connections)
+- Fast cold starts
+- Edge caching
+- SSL auto-configuration
 
-- **[Nuxt 3](https://nuxt.com)** - Vue.js framework
-- **[Nuxt UI](https://ui.nuxt.com)** - UI components
-- **[Tailwind CSS](https://tailwindcss.com)** - Styling
-- **[PostgreSQL](https://www.postgresql.org)** - Database
-- **[Drizzle ORM](https://orm.drizzle.team)** - Type-safe ORM
 
----
 
 ## 📖 Documentation
 
-See [database/schema.sql](database/schema.sql) for the complete database schema. You can run the SQL queries in your postgres database (cloud or hosted) to create tables.
+### Getting Started
+- **[Quick Start Guide](#-quick-start-guide)** - Get running in 5 minutes
+- **[Database Setup](docs/DATABASE_SETUP.md)** - Detailed database configuration
+- **[Environment Variables](#environment-variables)** - Complete configuration reference
 
-### Environment Variables
+### Features & Configuration
+- **[Audit Logs Setup](docs/AUDIT_LOGS_SETUP.md)** - Enable compliance tracking
+- **[Audit Logs Troubleshooting](docs/AUDIT_LOGS_TROUBLESHOOTING.md)** - Fix common issues
+- **[Database Backup & Restore](docs/DATABASE_BACKUP_RESTORE.md)** - Data protection strategies
 
-```env
-# Required
-NUXT_DATABASE_URL=postgresql://user:pass@host:5432/database
-NUXT_SITE_TOKEN=your-secure-random-token
-NUXT_SITE_USER=admin
 
-# Optional
-NUXT_CACHE_TTL=30
-NUXT_REDIRECT_STATUS_CODE=301
-NUXT_PUBLIC_SLUG_DEFAULT_LENGTH=6
-```
+## 🎯 Use Cases
+
+### For Marketers
+- Track campaign performance with UTM parameters
+- A/B test different landing pages
+- Monitor geographic reach
+- Analyze device and browser trends
+- Generate QR codes for offline campaigns
+
+### For Developers
+- Self-hosted alternative to Bitly, TinyURL, Short.io
+- API-first architecture for integrations
+- Webhook support for automation
+- Custom domain support
+- White-label solution
+
+### For Teams
+- Multi-user access with role-based permissions
+- Audit logs for compliance
+- Centralized link management
+- Team collaboration features
+- Secure password-protected links
+
+### For Content Creators
+- Link-in-bio pages for social media
+- Track audience engagement
+- Organize links by campaign or topic
+- Professional QR codes for merchandise
+- Analytics for content performance
 
 ---
 
-## 🤝 Contributing
+## 🛠️ Technology Stack
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
+**Frontend:**
+- [Nuxt 3](https://nuxt.com) - Vue.js meta-framework
+- [Nuxt UI](https://ui.nuxt.com) - Beautiful UI components
+- [Tailwind CSS](https://tailwindcss.com) - Utility-first CSS
+- [Chart.js](https://www.chartjs.org) - Analytics visualizations
+- [D3.js](https://d3js.org) - Geographic data visualization
+
+**Backend:**
+- [Node.js](https://nodejs.org) - JavaScript runtime
+- [Drizzle ORM](https://orm.drizzle.team) - Type-safe database queries
+- [PostgreSQL](https://www.postgresql.org) - Relational database
+- [node-postgres](https://node-postgres.com) - PostgreSQL client
+
+
+---
+
+## 🔒 Security & Privacy
+
+### Data Privacy
+- **No Third-Party Tracking** - Your data never leaves your server
+- **No Analytics Selling** - Your insights remain private
+- **Self-Hosted** - Complete data sovereignty
+
+### Security Features
+- **Secure Authentication** - Token-based access control
+- **Password Protection** - Protect sensitive links
+- **Audit Logging** - Track all administrative actions
+- **SQL Injection Protection** - Parameterized queries
+- **XSS Prevention** - Input sanitization
+- **CSRF Protection** - Built-in security headers
+
+
+
+## 📊 Live Demo
+
+Experience Syano in action:
+
+**Demo Instance:** [https://syano.netlify.app](https://syano.netlify.app)
+
+**Test Links:**
+- https://syano.netlify.app/gmap
+- https://syano.netlify.app/smo5r
+- https://syano.netlify.app/jubfz
+- https://syano.netlify.app/klcvx
+
+**Deployment:** Netlify + Neon Database (Serverless)
+
+---
+
+## 🖼️ Screenshots
+
+![Syano Dashboard - Self-Hosted URL Shortener](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/fcc6b6fcde2624a3cc5d80c0b25325b554c349a4/uploads/2026-04-12T11-39-00-437Z-06pwoe4r7.jpg)
+
+---
+
+### Reporting Issues
+Found a bug or have a feature request? [Open an issue](https://github.com/pritush/syano/issues) on GitHub.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **AGPL-3.0 License** - see the [LICENSE](LICENSE) file for details.
+Syano is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+This means:
+- ✅ Free to use, modify, and distribute
+- ✅ Open source forever
+- ✅ Commercial use allowed
+- ⚠️ Must disclose source code if you modify and deploy
+- ⚠️ Network use is considered distribution
+
+See the [LICENSE](LICENSE) file for full details.
+
+
+
+### Alternatives Comparison
+Syano vs. other URL shorteners:
+- **vs. Bitly** - Self-hosted, no monthly fees, unlimited links
+- **vs. TinyURL** - Advanced analytics, team management, audit logs
+- **vs. Short.io** - Open source, full data ownership, no vendor lock-in
+- **vs. Rebrandly** - Free forever, customizable, privacy-first
 
 ---
 
+## 💡 Frequently Asked Questions
+
+### Is Syano really free?
+Yes! Syano is 100% free and open source under the AGPL-3.0 license. No hidden costs, no premium tiers, no feature limitations.
+
+### Can I use my own domain?
+Absolutely! Deploy Syano on any domain you own. Perfect for branded short links like `yourbrand.link/promo`.
+
+### How many links can I create?
+Unlimited. There are no artificial limits on links, clicks, or users.
+
+### Is it suitable for production use?
+Yes! Syano is production-ready with features like connection pooling, caching, health checks, and audit logging.
+
+### Can I migrate from Bitly or other services?
+Yes! Use the bulk import feature to migrate your existing links. Export from your current service and import into Syano.
+
+### What about performance at scale?
+Syano is optimized for performance with database indexing, connection pooling, and caching. It handles thousands of redirects per second on modest hardware.
+
+### Do I need coding knowledge?
+Basic command-line knowledge is helpful for deployment, but the dashboard is user-friendly and requires no coding.
+
+### Can I customize the look and feel?
+Yes! Syano is fully customizable. Modify the source code, add your branding, or contribute themes back to the community.
+
+---
+
+
+Project by [Pritush](https://pritush.com.np)
+
+
+
 <div align="center">
 
-Made with ❤️ by [Pritush](https://pritush.com.np)
+**⭐ Star us on GitHub if you find Syano useful!**
 
-[GitHub](https://github.com/pritush/syano) • [Twitter](https://twitter.com/pri2sh)
+**Self-Hosted URL Shortener • Open Source Link Management • Privacy-First Analytics**
+
+[Get Started](#-quick-start-guide) • [View Demo](https://syano.netlify.app) • [Read Docs](docs/)
+
+Made with ❤️ for the open source community
 
 </div>

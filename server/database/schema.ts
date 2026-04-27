@@ -79,3 +79,16 @@ export const users = pgTable('users', {
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
+
+export const audit_logs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  actor_id: varchar('actor_id', { length: 64 }).notNull(),
+  actor_username: varchar('actor_username', { length: 128 }).notNull(),
+  action: varchar('action', { length: 32 }).notNull(),
+  entity_type: varchar('entity_type', { length: 32 }).notNull(),
+  entity_id: varchar('entity_id', { length: 128 }),
+  entity_label: varchar('entity_label', { length: 256 }),
+  details: jsonb('details'),
+  ip: inet('ip'),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})

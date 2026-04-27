@@ -4,9 +4,10 @@ import { createLinkSchema } from '~/shared/schemas/link'
 import { createLink, getLink, normalizeSlug } from '~/server/utils/link-store'
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
+import { recordAudit } from '~/server/utils/audit-log'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, PERMISSIONS.LINKS_CREATE)
+  const actor = await requirePermission(event, PERMISSIONS.LINKS_CREATE)
   const runtimeConfig = useRuntimeConfig(event)
   const body = await readBody(event)
   const parsed = createLinkSchema(runtimeConfig.public.slugDefaultLength).safeParse(body)
@@ -28,6 +29,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return await createLink(event, parsed.data)
+  const link = await createLink(event, parsed.data)
+
+  recordAudit(event, {
+    actor,
+    action: 'create',
+    entityType: 'link',
+    entityId: link.slug,
+    entityLabel: link.slug,
+    details: { url: link.url },
+  })
+
+  return link
 })
 

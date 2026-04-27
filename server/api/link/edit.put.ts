@@ -3,9 +3,10 @@ import { updateLinkSchema } from '~/shared/schemas/link'
 import { updateLink } from '~/server/utils/link-store'
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
+import { recordAudit } from '~/server/utils/audit-log'
 
 export default defineEventHandler(async (event) => {
-  await requirePermission(event, PERMISSIONS.LINKS_EDIT)
+  const actor = await requirePermission(event, PERMISSIONS.LINKS_EDIT)
   const body = await readBody(event)
   const parsed = updateLinkSchema.safeParse(body)
 
@@ -24,6 +25,15 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Link not found',
     })
   }
+
+  recordAudit(event, {
+    actor,
+    action: 'update',
+    entityType: 'link',
+    entityId: link.slug,
+    entityLabel: link.slug,
+    details: { url: link.url },
+  })
 
   return link
 })

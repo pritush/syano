@@ -52,6 +52,12 @@ const navigation = computed(() => {
       icon: 'lucide:database',
       show: isRoot.value,
     },
+    {
+      label: 'Audit Log',
+      to: '/dashboard/audit-log',
+      icon: 'lucide:scroll-text',
+      show: isRoot.value,
+    },
   ]
 
   return items.filter(item => item.show)

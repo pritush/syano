@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Audit logs table for immutable action tracking
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    actor_id VARCHAR(64) NOT NULL,
+    actor_username VARCHAR(128) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    entity_type VARCHAR(32) NOT NULL,
+    entity_id VARCHAR(128),
+    entity_label VARCHAR(256),
+    details JSONB,
+    ip INET,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug);
 CREATE INDEX IF NOT EXISTS idx_links_tag_id ON links(tag_id);
@@ -102,6 +116,10 @@ CREATE INDEX IF NOT EXISTS idx_access_logs_slug ON access_logs(slug);
 CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_logs_country ON access_logs(country);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
 
 -- Composite indexes for common query patterns (Performance Optimization)
 CREATE INDEX IF NOT EXISTS idx_access_logs_link_created ON access_logs(link_id, created_at DESC);

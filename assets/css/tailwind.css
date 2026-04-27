@@ -707,6 +707,89 @@ a {
   background: rgba(20, 184, 166, 0.08);
 }
 
+/* ── Audit Log ─────────────────────────────────── */
+
+.sy-audit-filters {
+  border-radius: 0.9rem;
+  border: 1px solid #d9e1ea;
+  background: #f8fafd;
+  padding: 1rem 1.15rem;
+}
+
+.dark .sy-audit-filters {
+  border-color: #243347;
+  background: #0f172a;
+}
+
+.sy-audit-select {
+  display: block;
+  width: 100%;
+  border-radius: 0.6rem;
+  border: 1px solid #d7dfe7;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #334155;
+  outline: none;
+  transition: border-color 150ms ease;
+  cursor: pointer;
+}
+
+.sy-audit-select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+}
+
+.dark .sy-audit-select {
+  border-color: #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .sy-audit-select:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.12);
+}
+
+.sy-audit-row {
+  border-radius: 0.75rem;
+  border: 1px solid #d9e1ea;
+  background: #f8fafd;
+  padding: 0.9rem 1rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.sy-audit-row:hover {
+  border-color: #bed5d3;
+  box-shadow: 0 2px 12px rgba(15, 118, 110, 0.06);
+}
+
+.dark .sy-audit-row {
+  border-color: #243347;
+  background: #0f172a;
+}
+
+.dark .sy-audit-row:hover {
+  border-color: rgba(20, 184, 166, 0.2);
+  box-shadow: 0 2px 12px rgba(20, 184, 166, 0.04);
+}
+
+.sy-audit-icon {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: #eef1f4;
+  transition: background-color 150ms ease;
+}
+
+.dark .sy-audit-icon {
+  background: #1e293b;
+}
+
 /* ── Responsive Breakpoints ─────────────────────── */
 
 @media (min-width: 768px) {
