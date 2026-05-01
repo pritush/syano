@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 const siteToken = process.env.NUXT_SITE_TOKEN || randomUUID()
 const siteUser = process.env.NUXT_SITE_USER || 'admin'
-const databaseUrl = process.env.NUXT_DATABASE_URL || process.env.DATABASE_URL || ''
+// DO NOT read DATABASE_URL at build time - it will be read at runtime
 const cacheTtl = Number(process.env.NUXT_CACHE_TTL || 30)
 const cacheStaleTtl = Number(process.env.NUXT_CACHE_STALE_TTL || 30)
 
@@ -78,7 +78,9 @@ export default defineNuxtConfig({
     },
   },
   runtimeConfig: {
-    databaseUrl,
+    // Database URL should ONLY be accessed at runtime, never at build time
+    // Nuxt will automatically map NUXT_DATABASE_URL env var to this
+    databaseUrl: '', // Will be populated from NUXT_DATABASE_URL at runtime
     siteToken,
     siteUser,
     cacheTtl,
