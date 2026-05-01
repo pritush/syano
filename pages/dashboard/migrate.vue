@@ -107,12 +107,12 @@ async function exportLinks() {
   errorMessage.value = ''
 
   try {
-    const response = await api.request<ExportResponse>('/api/link/export')
-    exportJson.value = JSON.stringify(response, null, 2)
-    statusMessage.value = `Exported ${response.items.length} links.`
-    toasts.success('Links exported', `${response.items.length} links exported successfully`)
+    const response = await api.exportLinks()
+    exportJson.value = JSON.stringify(response.data, null, 2)
+    statusMessage.value = `Exported ${response.data.count} links.`
+    toasts.success('Links exported', `${response.data.count} links exported successfully`)
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to export links.'
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to export links.'
     toasts.error('Export failed', errorMessage.value)
   } finally {
     exporting.value = false
@@ -142,19 +142,16 @@ async function importLinks() {
     const parsed = JSON.parse(importJson.value)
     const items = normalizeImportItems(parsed)
 
-    const response = await api.request<{ count: number }>('/api/link/import', {
-      method: 'POST',
-      body: {
-        overwrite: overwriteImport.value,
-        items,
-      },
+    const response = await api.importLinks({
+      overwrite: overwriteImport.value,
+      items,
     })
 
-    statusMessage.value = `Successfully imported ${response.count} links.`
-    toasts.success('Links imported', `${response.count} links imported successfully`)
+    statusMessage.value = `Successfully imported ${response.data.count} links.`
+    toasts.success('Links imported', `${response.data.count} links imported successfully`)
     importJson.value = ''
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.message || 'Unable to import links. Check format.'
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || error?.message || 'Unable to import links. Check format.'
     toasts.error('Import failed', errorMessage.value)
   } finally {
     importing.value = false

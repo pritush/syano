@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { getRequestURL } from 'h3'
+import { createError, getRequestURL } from 'h3'
 import { and, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm'
 import { useRuntimeConfig } from '#imports'
 import type { CreateLinkInput, UpdateLinkInput } from '~/shared/schemas/link'
@@ -25,24 +25,9 @@ export function buildShortLink(event: H3Event, slug: string) {
   return `${requestUrl.origin}/${slug}`
 }
 
-const linkCache = new Map<string, { value: StoredLink | undefined, expires: number }>()
-
-function invalidateLinkCache(event: H3Event, slug: string) {
-  const runtimeConfig = useRuntimeConfig(event)
-  const normalized = normalizeSlug(slug, runtimeConfig.caseSensitive)
-  linkCache.delete(`${normalized}_${runtimeConfig.caseSensitive}`)
-}
-
 export async function getLink(event: H3Event, slug: string) {
   const runtimeConfig = useRuntimeConfig(event)
   const normalized = normalizeSlug(slug, runtimeConfig.caseSensitive)
-  const cacheKey = `${normalized}_${runtimeConfig.caseSensitive}`
-
-  const cached = linkCache.get(cacheKey)
-  if (cached && cached.expires > Date.now()) {
-    return cached.value
-  }
-
   const db = await useDrizzle(event)
 
   let result
@@ -54,15 +39,6 @@ export async function getLink(event: H3Event, slug: string) {
     result = await db.query.links.findFirst({
       where: sql`lower(${links.slug}) = ${normalized}`,
     })
-  }
-
-  // Set in-memory cache for 3 minutes for aggressive performance
-  linkCache.set(cacheKey, { value: result, expires: Date.now() + 1000 * 60 * 3 })
-  
-  // Guard against unbound memory growth (keep under ~5k entries)
-  if (linkCache.size > 5000) {
-    const keysToDelete = Array.from(linkCache.keys()).slice(0, 100)
-    for (const k of keysToDelete) linkCache.delete(k)
   }
 
   return result
@@ -87,7 +63,7 @@ export async function ensureAvailableSlug(event: H3Event, requestedSlug?: string
   return candidate
 }
 
-export async function createLink(event: H3Event, input: CreateLinkInput) {
+export async function createLink(event: H3Event, input: CreateLinkInput): Promise<StoredLink> {
   const db = await useDrizzle(event)
   const slug = await ensureAvailableSlug(event, input.slug, input.slug_length)
 
@@ -113,7 +89,13 @@ export async function createLink(event: H3Event, input: CreateLinkInput) {
     })
     .returning()
 
-  invalidateLinkCache(event, slug)
+  if (!link) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to create link',
+    })
+  }
+
   return link
 }
 
@@ -132,11 +114,10 @@ export async function updateLink(event: H3Event, input: UpdateLinkInput) {
     .where(runtimeConfig.caseSensitive ? eq(links.slug, normalizedSlug) : sql`lower(${links.slug}) = ${normalizedSlug}`)
     .returning()
 
-  invalidateLinkCache(event, input.slug)
   return link || null
 }
 
-export async function upsertLink(event: H3Event, input: CreateLinkInput) {
+export async function upsertLink(event: H3Event, input: CreateLinkInput): Promise<StoredLink> {
   const db = await useDrizzle(event)
   const slug = await ensureAvailableSlug(event, input.slug, input.slug_length)
 
@@ -181,7 +162,13 @@ export async function upsertLink(event: H3Event, input: CreateLinkInput) {
     })
     .returning()
 
-  invalidateLinkCache(event, slug)
+  if (!link) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to upsert link',
+    })
+  }
+
   return link
 }
 
@@ -195,7 +182,6 @@ export async function deleteLink(event: H3Event, slug: string) {
     .where(runtimeConfig.caseSensitive ? eq(links.slug, normalized) : sql`lower(${links.slug}) = ${normalized}`)
     .returning()
 
-  invalidateLinkCache(event, slug)
   return deleted || null
 }
 

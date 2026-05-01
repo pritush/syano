@@ -104,6 +104,59 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- API keys table for API authentication
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(128) NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
+    key_hash TEXT NOT NULL,
+    key_encrypted TEXT,
+    permissions TEXT[] NOT NULL DEFAULT '{}',
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Webhooks table for event notifications
+CREATE TABLE IF NOT EXISTS webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(128) NOT NULL,
+    url TEXT NOT NULL,
+    events TEXT[] NOT NULL DEFAULT '{}',
+    secret TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_triggered_at TIMESTAMP WITH TIME ZONE,
+    failure_count BIGINT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Webhook deliveries table for tracking webhook calls
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_id UUID REFERENCES webhooks(id) ON DELETE CASCADE,
+    event_type VARCHAR(64) NOT NULL,
+    payload JSONB NOT NULL,
+    response_status BIGINT,
+    response_body TEXT,
+    error TEXT,
+    delivered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- API rate limiting table
+CREATE TABLE IF NOT EXISTS api_rate_limits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    api_key_id UUID REFERENCES api_keys(id) ON DELETE CASCADE,
+    endpoint VARCHAR(256) NOT NULL,
+    request_count BIGINT DEFAULT 0,
+    window_start TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug);
 CREATE INDEX IF NOT EXISTS idx_links_tag_id ON links(tag_id);
@@ -117,6 +170,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DE
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix ON api_keys(key_prefix);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks(user_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(delivered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_api_key_id ON api_rate_limits(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window ON api_rate_limits(window_start);
 
 -- Composite indexes for common query patterns (Performance Optimization)
 CREATE INDEX IF NOT EXISTS idx_access_logs_link_created ON access_logs(link_id, created_at DESC);

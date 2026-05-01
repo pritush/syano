@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   SETTINGS_MANAGE: 'settings:manage',
   DATA_MANAGE: 'data:manage',
   USERS_MANAGE: 'users:manage',
+  API_MANAGE: 'api:manage',
 } as const
 
 export type PermissionKey = typeof PERMISSIONS[keyof typeof PERMISSIONS]
@@ -55,6 +56,7 @@ export const ALL_PERMISSIONS: PermissionInfo[] = [
   // System
   { key: PERMISSIONS.DATA_MANAGE, label: 'Data Operations', description: 'Backup, restore, and migrate database', icon: 'lucide:database', category: 'system' },
   { key: PERMISSIONS.USERS_MANAGE, label: 'Manage Users', description: 'Add, remove, and configure user access', icon: 'lucide:users', category: 'system' },
+  { key: PERMISSIONS.API_MANAGE, label: 'Manage API Keys', description: 'Create and manage API keys', icon: 'lucide:key', category: 'system' },
 ]
 
 // ── Preset Roles ──────────────────────────────────────────
@@ -122,6 +124,7 @@ export const PRESET_ROLES: PresetRole[] = [
       PERMISSIONS.SETTINGS_MANAGE,
       PERMISSIONS.DATA_MANAGE,
       PERMISSIONS.USERS_MANAGE,
+      PERMISSIONS.API_MANAGE,
     ],
   },
 ]

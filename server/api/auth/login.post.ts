@@ -4,6 +4,139 @@ import { loginSchema } from '~/shared/schemas/user'
 import { WILDCARD_PERMISSION } from '~/shared/permissions'
 import { findUserByUsername, verifyPassword, signJWT } from '~/server/utils/auth'
 
+defineRouteMeta({
+  openAPI: {
+    tags: ['Authentication'],
+    summary: 'User login',
+    description: 'Authenticate a user and receive a JWT token. Supports both root admin (from environment) and database users.',
+    requestBody: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['username', 'password'],
+            properties: {
+              username: {
+                type: 'string',
+                description: 'Username',
+                example: 'admin',
+              },
+              password: {
+                type: 'string',
+                format: 'password',
+                description: 'Password',
+                example: 'admin123',
+              },
+            },
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Login successful',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                token: {
+                  type: 'string',
+                  description: 'JWT authentication token',
+                  example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+                },
+                user: {
+                  $ref: '#/components/schemas/User',
+                },
+              },
+            },
+          },
+        },
+      },
+      400: {
+        description: 'Invalid request body',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Error' },
+          },
+        },
+      },
+      401: {
+        description: 'Invalid credentials or account disabled',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/Error' },
+          },
+        },
+      },
+    },
+    $global: {
+      components: {
+        schemas: {
+          User: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'string',
+                description: 'User ID',
+              },
+              username: {
+                type: 'string',
+                description: 'Username',
+              },
+              displayName: {
+                type: 'string',
+                description: 'Display name',
+              },
+              permissions: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'User permissions',
+              },
+              isRoot: {
+                type: 'boolean',
+                description: 'Whether user is root admin',
+              },
+            },
+          },
+          Error: {
+            type: 'object',
+            properties: {
+              statusCode: {
+                type: 'integer',
+                description: 'HTTP status code',
+              },
+              statusMessage: {
+                type: 'string',
+                description: 'Error message',
+              },
+              message: {
+                type: 'string',
+                description: 'Detailed error message',
+              },
+            },
+          },
+        },
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearer: 'JWT',
+            description: 'JWT token obtained from /api/auth/login',
+          },
+          apiKeyAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearer: 'API Key',
+            description: 'API key created from dashboard',
+          },
+        },
+      },
+    },
+  },
+})
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const parsed = loginSchema.safeParse(body)

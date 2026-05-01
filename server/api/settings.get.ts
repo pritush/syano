@@ -4,4 +4,3 @@ import { loadSiteSettingsForHomepage } from '~/server/utils/site-settings'
 export default defineEventHandler(async (event) => {
   return await loadSiteSettingsForHomepage(event)
 })
-

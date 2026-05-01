@@ -237,8 +237,8 @@ function queryParams() {
 }
 
 async function loadTags() {
-  const response = await api.request<{ items: TagItem[] }>('/api/tags/list')
-  tags.value = response.items
+  const response = await api.listTags()
+  tags.value = response.data
 }
 
 async function loadAnalytics() {
@@ -248,24 +248,24 @@ async function loadAnalytics() {
   try {
     const query = queryParams()
     const [counterData, viewData, metricData, heatmapData, eventData, locationData, qrData] = await Promise.all([
-      api.request<Counters>('/api/stats/counters', { query }),
-      api.request<ViewsResponse>('/api/stats/views', { query }),
-      api.request<MetricsResponse>('/api/stats/metrics', { query }),
-      api.request<HeatmapResponse>('/api/stats/heatmap', { query }),
-      api.request<EventsResponse>('/api/logs/events', { query: { ...query, limit: 12 } }),
-      api.request<LocationsResponse>('/api/logs/locations', { query }),
-      api.request<{ qr_scans: number }>('/api/stats/qr-scans', { query }),
+      api.getAnalyticsCounters(query),
+      api.getAnalyticsViews(query),
+      api.getAnalyticsMetrics(query),
+      api.getAnalyticsHeatmap(query),
+      api.getAnalyticsEvents({ ...query, limit: 12 }),
+      api.getAnalyticsLocations(query),
+      api.getQrScans(query),
     ])
 
-    counters.value = counterData
-    views.value = viewData.items
-    metrics.value = metricData
-    heatmap.value = heatmapData.items
-    events.value = eventData.items
-    locations.value = locationData.items
-    qrScans.value = qrData.qr_scans
+    counters.value = counterData.data
+    views.value = viewData.data
+    metrics.value = metricData.data
+    heatmap.value = heatmapData.data
+    events.value = eventData.data
+    locations.value = locationData.data
+    qrScans.value = qrData.data.qr_scans
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to load analytics.'
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to load analytics.'
   } finally {
     loading.value = false
   }

@@ -208,14 +208,32 @@ async function loadLinks() {
   errorMessage.value = ''
 
   try {
-    const response = await api.request<{ items: LinkRecord[] }>('/api/link/list', {
-      query: {
-        limit: 100,
-        tag_id: selectedTagId.value || undefined,
-      },
+    const response = await api.listLinks({
+      limit: 1000, // Get all links for client-side filtering
+      tag_id: selectedTagId.value || undefined,
     })
 
-    links.value = response.items
+    // Map V1 API response to legacy format for compatibility
+    links.value = response.data.map(link => ({
+      id: link.id,
+      slug: link.slug,
+      url: link.url,
+      comment: link.comment,
+      title: link.title,
+      description: link.description,
+      image: null,
+      apple: null,
+      google: null,
+      cloaking: link.cloaking,
+      redirect_with_query: link.redirect_with_query,
+      password: null,
+      unsafe: false,
+      tag_id: link.tag_id,
+      expiration: link.expiration,
+      created_at: link.created_at,
+      updated_at: link.updated_at,
+      click_count: link.click_count ?? 0,
+    }))
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to load links.'
   } finally {
@@ -225,8 +243,8 @@ async function loadLinks() {
 
 async function loadTags() {
   try {
-    const response = await api.request<{ items: TagItem[] }>('/api/tags/list')
-    tags.value = response.items
+    const response = await api.listTags()
+    tags.value = response.data
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to load tags.'
   }
@@ -259,18 +277,15 @@ async function confirmRemoveLink() {
   statusMessage.value = ''
 
   try {
-    await api.request('/api/link/delete', {
-      method: 'POST',
-      body: { slug },
-    })
+    await api.deleteLink(slug)
 
     await loadLinks()
     toasts.deleted(`/${slug}`, 'Link')
     deletingSlug.value = null
     closeDeleteModal()
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to delete this link.'
-    toasts.error('Delete failed', error?.data?.statusMessage || 'Unable to delete this link.')
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to delete this link.'
+    toasts.error('Delete failed', error?.data?.statusMessage || error?.data?.message || 'Unable to delete this link.')
   } finally {
     deletingSlug.value = null
   }

@@ -28,6 +28,16 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  // API docs routes handle their own auth via query token
+  if (pathname === '/api/scalar' || pathname === '/api/openapi') {
+    return
+  }
+
+  // V1 API endpoints handle their own authentication (unified auth)
+  if (pathname.startsWith('/api/v1/')) {
+    return
+  }
+
   // Verify authentication (JWT or legacy token)
   const user = await getAuthUser(event)
 

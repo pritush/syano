@@ -35,6 +35,18 @@ const navigation = computed(() => {
       show: true,
     },
     {
+      label: 'API Keys',
+      to: '/dashboard/api-keys',
+      icon: 'lucide:key',
+      show: isRoot.value || can(PERMISSIONS.API_MANAGE),
+    },
+    {
+      label: 'API Documentation',
+      to: '/dashboard/api-docs',
+      icon: 'lucide:book-open',
+      show: isRoot.value || can(PERMISSIONS.USERS_MANAGE),
+    },
+    {
       label: 'Homepage Settings',
       to: '/dashboard/settings',
       icon: 'lucide:settings-2',
@@ -67,8 +79,10 @@ const userInitials = computed(() => {
   if (!user.value) return 'SY'
   const name = user.value.displayName || user.value.username
   const parts = name.split(/[\s._-]+/)
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
+  const first = parts[0]?.[0]
+  const second = parts[1]?.[0]
+  if (first && second) {
+    return (first + second).toUpperCase()
   }
   return name.slice(0, 2).toUpperCase()
 })
@@ -226,50 +240,7 @@ watch(isMobile, (mobile) => {
         </UTooltip>
       </nav>
 
-      <div class="mt-auto space-y-2 pt-5">
-        <!-- Current user info -->
-        <div v-if="user && !sidebarCollapsed" class="sy-sidebar-user-info">
-          <div class="sy-sidebar-user-avatar">
-            {{ userInitials }}
-          </div>
-          <div class="sy-sidebar-user-meta">
-            <p class="sy-sidebar-user-name">{{ user.displayName || user.username }}</p>
-            <p class="sy-sidebar-user-role">{{ user.isRoot ? 'Root Admin' : 'User' }}</p>
-          </div>
-        </div>
 
-        <UTooltip
-          text="Help"
-          :popper="{ placement: 'right' }"
-          :disabled="!sidebarCollapsed"
-        >
-          <button
-            type="button"
-            class="sy-dashboard-nav-link"
-            :title="sidebarCollapsed ? 'Help' : undefined"
-            :aria-label="sidebarCollapsed ? 'Help' : undefined"
-          >
-            <UIcon name="lucide:circle-help" class="h-4 w-4 shrink-0" />
-            <span class="sy-dashboard-nav-label">Help</span>
-          </button>
-        </UTooltip>
-        <UTooltip
-          text="Logout"
-          :popper="{ placement: 'right' }"
-          :disabled="!sidebarCollapsed"
-        >
-          <button
-            type="button"
-            class="sy-dashboard-nav-link"
-            :title="sidebarCollapsed ? 'Logout' : undefined"
-            :aria-label="sidebarCollapsed ? 'Logout' : undefined"
-            @click="logout"
-          >
-            <UIcon name="lucide:log-out" class="h-4 w-4 shrink-0" />
-            <span class="sy-dashboard-nav-label">Logout</span>
-          </button>
-        </UTooltip>
-      </div>
 
 
     </aside>
@@ -307,6 +278,16 @@ watch(isMobile, (mobile) => {
             title="Create link"
           />
 
+          <!-- Help button -->
+          <button
+            type="button"
+            class="sy-dashboard-icon-button"
+            aria-label="Help"
+            title="Help"
+          >
+            <UIcon name="lucide:circle-help" class="h-5 w-5" />
+          </button>
+
           <!-- Color mode toggle -->
           <button
             type="button"
@@ -316,6 +297,17 @@ watch(isMobile, (mobile) => {
             @click="cycleColorMode"
           >
             <UIcon :name="colorModeIcon" class="h-5 w-5" />
+          </button>
+
+          <!-- Logout button -->
+          <button
+            type="button"
+            class="sy-dashboard-icon-button"
+            aria-label="Logout"
+            title="Logout"
+            @click="logout"
+          >
+            <UIcon name="lucide:log-out" class="h-5 w-5" />
           </button>
 
           <button type="button" class="sy-dashboard-avatar" aria-label="Profile">

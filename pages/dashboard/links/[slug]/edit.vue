@@ -129,8 +129,8 @@ onMounted(async () => {
 
 async function loadTags() {
   try {
-    const response = await api.request<{ items: TagItem[] }>('/api/tags/list')
-    tags.value = response.items
+    const response = await api.listTags()
+    tags.value = response.data
   } catch {
     // silent
   }
@@ -140,9 +140,8 @@ async function loadLink() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const data = await api.request<any>('/api/link/query', {
-      query: { slug: linkSlug.value },
-    })
+    const response = await api.getLink(linkSlug.value)
+    const data = response.data
 
     form.url = data.url
     form.comment = data.comment || ''
@@ -170,39 +169,43 @@ async function loadLink() {
       showExpiration.value = true
     }
 
-    if (data.password || data.cloaking || data.redirect_with_query || data.unsafe) {
+    // Note: V1 API doesn't return password, apple, google, unsafe fields
+    // We'll show the settings sections if cloaking or redirect_with_query is enabled
+    if (data.cloaking || data.redirect_with_query) {
       showLinkSettings.value = true
-      form.password = data.password || ''
       form.cloaking = data.cloaking
       form.redirectWithQuery = data.redirect_with_query
-      form.unsafe = data.unsafe
-    }
-
-    if (data.apple || data.google) {
-      showDeviceRedirect.value = true
-      form.apple = data.apple || ''
-      form.google = data.google || ''
     }
   } catch (err: any) {
-    errorMessage.value = err?.data?.statusMessage || 'Failed to load link details.'
+    errorMessage.value = err?.data?.statusMessage || err?.data?.message || 'Failed to load link details.'
   } finally {
     loading.value = false
   }
 }
 
 function buildPayload() {
-  return {
+  const payload: any = {
     url: form.url.trim(),
     comment: form.comment.trim() || null,
-    apple: showDeviceRedirect.value ? (form.apple.trim() || null) : null,
-    google: showDeviceRedirect.value ? (form.google.trim() || null) : null,
-    password: showLinkSettings.value ? (form.password.trim() || null) : null,
-    expiration: showExpiration.value && form.expiration ? new Date(form.expiration).toISOString() : null,
     tag_id: form.tagId || null,
-    cloaking: showLinkSettings.value ? form.cloaking : false,
-    redirect_with_query: showLinkSettings.value ? form.redirectWithQuery : false,
-    unsafe: showLinkSettings.value ? form.unsafe : false,
   }
+
+  if (showExpiration.value && form.expiration) {
+    // Convert to Unix timestamp (seconds)
+    payload.expiration = Math.floor(new Date(form.expiration).getTime() / 1000)
+  } else {
+    payload.expiration = null
+  }
+
+  if (showLinkSettings.value) {
+    if (form.password.trim()) {
+      payload.password = form.password.trim()
+    }
+    payload.cloaking = form.cloaking
+    payload.redirect_with_query = form.redirectWithQuery
+  }
+
+  return payload
 }
 
 async function submit() {
@@ -216,20 +219,14 @@ async function submit() {
   statusMessage.value = ''
 
   try {
-    await api.request('/api/link/edit', {
-      method: 'PUT',
-      body: {
-        slug: linkSlug.value,
-        ...buildPayload(),
-      },
-    })
+    await api.updateLink(linkSlug.value, buildPayload())
 
     statusMessage.value = `Link updated successfully!`
     setTimeout(() => {
       router.push('/dashboard/links')
     }, 1500)
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to save this link.'
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to save this link.'
   } finally {
     saving.value = false
   }

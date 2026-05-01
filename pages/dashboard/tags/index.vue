@@ -41,8 +41,8 @@ const deleteModalDescription = computed(() => {
 async function loadTags() {
   loadingTags.value = true
   try {
-    const response = await api.request<{ items: TagItem[] }>('/api/tags/list')
-    tags.value = response.items
+    const response = await api.listTags()
+    tags.value = response.data
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to load tags.'
   } finally {
@@ -60,12 +60,7 @@ async function createTag() {
   errorMessage.value = ''
 
   try {
-    await api.request('/api/tags/create', {
-      method: 'POST',
-      body: {
-        name: tagName.value.trim(),
-      },
-    })
+    await api.createTag({ name: tagName.value.trim() })
 
     tagName.value = ''
     await loadTags()
@@ -106,17 +101,14 @@ async function confirmDeleteTag() {
   errorMessage.value = ''
 
   try {
-    await api.request('/api/tags/delete', {
-      method: 'POST',
-      body: { id: tag.id },
-    })
+    await api.deleteTag(tag.id)
 
     await loadTags()
     toasts.deleted(`"${tag.name}"`, 'Tag')
     closeDeleteModal()
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to delete tag.'
-    toasts.error('Delete failed', error?.data?.statusMessage || 'Unable to delete tag.')
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to delete tag.'
+    toasts.error('Delete failed', error?.data?.statusMessage || error?.data?.message || 'Unable to delete tag.')
   } finally {
     deletingTagId.value = null
   }
@@ -225,16 +217,6 @@ onMounted(loadTags)
       </UCard>
     </div>
 
-    <DashboardConfirmationModal
-      v-model="deleteModalOpen"
-      title="Delete Tag"
-      :description="deleteModalDescription"
-      confirm-label="Delete Tag"
-      color="error"
-      :loading="Boolean(deletingTagId && pendingDeleteTag && deletingTagId === pendingDeleteTag.id)"
-      @confirm="confirmDeleteTag"
-      @cancel="closeDeleteModal"
-    />
   </div>
 
   <!-- Delete Confirmation Modal -->

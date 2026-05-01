@@ -58,6 +58,13 @@ export default defineEventHandler(async (event) => {
     createdAt: users.created_at,
   })
 
+  if (!created) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to create user',
+    })
+  }
+
   recordAudit(event, {
     actor,
     action: 'create',

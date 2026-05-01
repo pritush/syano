@@ -23,6 +23,25 @@ export default defineNuxtConfig({
     viewTransition: true,
   },
   
+  // Nitro configuration
+  nitro: {
+    experimental: {
+      openAPI: true,
+    },
+    openAPI: {
+      meta: {
+        title: 'SyanoLink API',
+        description: 'URL shortener and link management API with analytics',
+        version: '1.0.0',
+      },
+      production: 'runtime',
+      ui: {
+        // Scalar UI is disabled here — it's embedded in /dashboard/api-docs instead
+        scalar: false,
+      },
+    },
+  },
+  
   app: {
     head: {
       titleTemplate: '%s',

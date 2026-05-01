@@ -24,6 +24,9 @@
 
 Most URL shorteners lock you into their ecosystem — your links, your data, and your analytics are controlled by someone else. **Syano is different.** As a fully open source URL shortener, you own everything.
 
+Deploy in serverless or VPS infrastructure. Visit /dashboard to login and manage your links. Set login and settings from .env file.
+
+
 ### The Problem with Cloud URL Shorteners
 - 🚫 Your links can disappear if the service shuts down
 - 🚫 Analytics data is sold to third parties
@@ -92,7 +95,7 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 - Referrer source analysis
 - Acquisition channel breakdown
 
-**Behavioral Analytics**
+**Analytics**
 - Activity heatmap (day × hour)
 - Peak traffic time identification
 - Click pattern analysis
@@ -152,14 +155,31 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 - Role-based access control (RBAC)
 - Permission inheritance
 
-**Permissions Include:**
-- Link creation, editing, deletion
-- Analytics viewing
+
+### 🔌 REST API 
+
+**Programmatic Access**
+- Full REST API for link management
+- API key authentication with granular permissions
+- OpenAPI-compatible endpoints
+- Modern API documentation and API playground using Scalar
+
+**API Features**
+- Create, read, update, delete links
+- Bulk link creation 
+- Analytics data export
 - Tag management
-- User management
-- Import/export operations
-- Settings modification
-- Audit log access (super-amin only)
+- Search across links
+
+
+**Integration Examples**
+- Zapier workflows
+- Make.com (Integromat) scenarios
+- n8n automation
+- Custom applications
+- CI/CD pipelines
+- Slack/Discord notifications
+
 
 
 ### ⚡ Performance & Infrastructure
@@ -179,17 +199,15 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 - Clean, intuitive dashboard
 - Full dark mode support
 - Responsive design (mobile, tablet, desktop)
-- Keyboard shortcuts
 - Real-time updates
 
 **Developer Experience**
 - TypeScript throughout
 - Type-safe database queries (Drizzle ORM)
 - Comprehensive API documentation
-- Easy local development setup
-- Hot module replacement
-- Detailed error messages
+- Easy local & cloud setup
 - One click database update
+- Easy database migration from dashboard
 
 ---
 
@@ -201,7 +219,7 @@ Get your self-hosted URL shortener running in under 5 minutes.
 
 - **Node.js** 18 or higher
 - **PostgreSQL** 14 or higher
-- **pnpm** (recommended) or npm
+- **pnpm** (recommended)
 
 ### Installation Steps
 
@@ -229,7 +247,7 @@ DATABASE_URL=postgresql://user:pass@project-pooler.neon.tech/db?sslmode=require
 # For traditional servers (VPS/Docker): Use direct connection
 # DATABASE_URL=postgresql://user:pass@localhost:5432/syano
 
-# Authentication
+# Authentication (for login /dashboard)
 NUXT_SITE_TOKEN=your-secure-random-token-here
 NUXT_SITE_USER=root
 
@@ -309,26 +327,6 @@ netlify deploy --prod
 #### Vercel
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pritush/syano)
 
-**Automatic Optimizations:**
-- Connection pooling (1-3 connections)
-- Fast cold starts
-- Edge caching
-- SSL auto-configuration
-
-
-
-## 📖 Documentation
-
-### Getting Started
-- **[Quick Start Guide](#-quick-start-guide)** - Get running in 5 minutes
-- **[Database Setup](docs/DATABASE_SETUP.md)** - Detailed database configuration
-- **[Environment Variables](#environment-variables)** - Complete configuration reference
-
-### Features & Configuration
-- **[Audit Logs Setup](docs/AUDIT_LOGS_SETUP.md)** - Enable compliance tracking
-- **[Audit Logs Troubleshooting](docs/AUDIT_LOGS_TROUBLESHOOTING.md)** - Fix common issues
-- **[Database Backup & Restore](docs/DATABASE_BACKUP_RESTORE.md)** - Data protection strategies
-
 
 ## 🎯 Use Cases
 
@@ -341,10 +339,12 @@ netlify deploy --prod
 
 ### For Developers
 - Self-hosted alternative to Bitly, TinyURL, Short.io
-- API-first architecture for integrations
-- Webhook support for automation
+- REST API for programmatic link creation
+- Webhook integrations with Zapier, Make.com, n8n
 - Custom domain support
 - White-label solution
+- CI/CD pipeline integration
+- Automated link generation from deployments
 
 ### For Teams
 - Multi-user access with role-based permissions
@@ -370,12 +370,13 @@ netlify deploy --prod
 - [Tailwind CSS](https://tailwindcss.com) - Utility-first CSS
 - [Chart.js](https://www.chartjs.org) - Analytics visualizations
 - [D3.js](https://d3js.org) - Geographic data visualization
+- [Scalar](https://scalar.com) - API documentation and API playground
 
 **Backend:**
 - [Node.js](https://nodejs.org) - JavaScript runtime
 - [Drizzle ORM](https://orm.drizzle.team) - Type-safe database queries
 - [PostgreSQL](https://www.postgresql.org) - Relational database
-- [node-postgres](https://node-postgres.com) - PostgreSQL client
+
 
 
 ---
@@ -386,15 +387,6 @@ netlify deploy --prod
 - **No Third-Party Tracking** - Your data never leaves your server
 - **No Analytics Selling** - Your insights remain private
 - **Self-Hosted** - Complete data sovereignty
-
-### Security Features
-- **Secure Authentication** - Token-based access control
-- **Password Protection** - Protect sensitive links
-- **Audit Logging** - Track all administrative actions
-- **SQL Injection Protection** - Parameterized queries
-- **XSS Prevention** - Input sanitization
-- **CSRF Protection** - Built-in security headers
-
 
 
 ## 📊 Live Demo
@@ -408,8 +400,6 @@ Experience Syano in action:
 - https://syano.netlify.app/smo5r
 - https://syano.netlify.app/jubfz
 - https://syano.netlify.app/klcvx
-
-**Deployment:** Netlify + Neon Database (Serverless)
 
 ---
 
@@ -433,10 +423,8 @@ This means:
 - ✅ Open source forever
 - ✅ Commercial use allowed
 - ⚠️ Must disclose source code if you modify and deploy
-- ⚠️ Network use is considered distribution
 
 See the [LICENSE](LICENSE) file for full details.
-
 
 
 ### Alternatives Comparison

@@ -92,3 +92,27 @@ export const audit_logs = pgTable('audit_logs', {
   ip: inet('ip'),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
+
+export const api_keys = pgTable('api_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 128 }).notNull(),
+  key_prefix: varchar('key_prefix', { length: 16 }).notNull(),
+  key_hash: text('key_hash').notNull(),
+  key_encrypted: text('key_encrypted'), // Encrypted full API key for retrieval
+  permissions: text('permissions').array().notNull().default([]),
+  last_used_at: timestamp('last_used_at', { withTimezone: true, mode: 'date' }),
+  expires_at: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+  is_active: boolean('is_active').default(true),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})
+
+export const api_rate_limits = pgTable('api_rate_limits', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  api_key_id: uuid('api_key_id').references(() => api_keys.id, { onDelete: 'cascade' }),
+  endpoint: varchar('endpoint', { length: 256 }).notNull(),
+  request_count: bigint('request_count', { mode: 'number' }).default(0),
+  window_start: timestamp('window_start', { withTimezone: true, mode: 'date' }).defaultNow(),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})

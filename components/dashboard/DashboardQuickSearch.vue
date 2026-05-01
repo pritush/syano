@@ -28,13 +28,11 @@ async function runSearch() {
   loading.value = true
 
   try {
-    const response = await api.request<{ items: SearchItem[] }>('/api/link/search', {
-      query: {
-        q: query,
-        limit: 8,
-      },
+    const response = await api.searchLinks({
+      q: query,
+      limit: 8,
     })
-    results.value = response.items
+    results.value = response.data
   } finally {
     loading.value = false
   }

@@ -2,6 +2,8 @@ export default defineAppConfig({
   slugRegex: '^[A-Za-z0-9_-]+$',
   reserveSlug: [
     'api',
+    '_openapi',
+    '_scalar',
     'dashboard',
     '_nuxt',
     '__nuxt_error',

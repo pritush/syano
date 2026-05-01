@@ -129,8 +129,8 @@ onMounted(async () => {
 async function loadTags() {
   loadingTags.value = true
   try {
-    const response = await api.request<{ items: TagItem[] }>('/api/tags/list')
-    tags.value = response.items
+    const response = await api.listTags()
+    tags.value = response.data
   } catch {
     // silent
   } finally {
@@ -139,22 +139,44 @@ async function loadTags() {
 }
 
 function buildPayload() {
-  return {
-    slug: form.slug.trim() || undefined,
+  const payload: any = {
     url: form.url.trim(),
-    comment: form.comment.trim() || null,
-    title: null,
-    description: null,
-    image: null,
-    apple: showDeviceRedirect.value ? (form.apple.trim() || null) : null,
-    google: showDeviceRedirect.value ? (form.google.trim() || null) : null,
-    password: showLinkSettings.value ? (form.password.trim() || null) : null,
-    expiration: showExpiration.value && form.expiration ? new Date(form.expiration).toISOString() : null,
-    tag_id: form.tagId || null,
-    cloaking: showLinkSettings.value ? form.cloaking : false,
-    redirect_with_query: showLinkSettings.value ? form.redirectWithQuery : false,
-    unsafe: showLinkSettings.value ? form.unsafe : false,
+    comment: form.comment.trim() || undefined,
   }
+
+  // Only include slug if user modified it
+  if (form.slug.trim()) {
+    payload.slug = form.slug.trim()
+  }
+
+  // Optional fields
+  if (form.tagId) {
+    payload.tag_id = form.tagId
+  }
+
+  if (showExpiration.value && form.expiration) {
+    // Convert to Unix timestamp (seconds)
+    payload.expiration = Math.floor(new Date(form.expiration).getTime() / 1000)
+  }
+
+  if (showLinkSettings.value) {
+    if (form.password.trim()) {
+      payload.password = form.password.trim()
+    }
+    payload.cloaking = form.cloaking
+    payload.redirect_with_query = form.redirectWithQuery
+  }
+
+  if (showDeviceRedirect.value) {
+    if (form.apple.trim()) {
+      payload.apple = form.apple.trim()
+    }
+    if (form.google.trim()) {
+      payload.google = form.google.trim()
+    }
+  }
+
+  return payload
 }
 
 async function submit() {
@@ -168,18 +190,15 @@ async function submit() {
   statusMessage.value = ''
 
   try {
-    const created = await api.request<{ slug: string; url: string }>('/api/link/create', {
-      method: 'POST',
-      body: {
-        ...buildPayload(),
-        slug_length: 5,
-      },
-    })
-
-    createdLink.value = created
+    const response = await api.createLink(buildPayload())
+    
+    createdLink.value = {
+      slug: response.data.slug,
+      url: response.data.url,
+    }
     statusMessage.value = `Link created successfully!`
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to create this link.'
+    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to create this link.'
   } finally {
     saving.value = false
   }

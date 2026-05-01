@@ -67,6 +67,13 @@ export default defineEventHandler(async (event) => {
       updatedAt: users.updated_at,
     })
 
+  if (!updated) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to update user',
+    })
+  }
+
   // Build a summary of what changed for the audit details
   const changedFields: string[] = []
   if (parsed.data.displayName !== undefined) changedFields.push('displayName')
