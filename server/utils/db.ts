@@ -176,10 +176,10 @@ function createPoolConfig(databaseUrl: string): PoolConfig {
 
   const config: PoolConfig = {
     connectionString: databaseUrl,
-    // Smaller pool for serverless, larger for traditional hosting
-    max: isServerless ? 5 : 20,
-    min: isServerless ? 0 : 2,
-    idleTimeoutMillis: 30000,
+    // Optimized for NeonDB free tier - smaller pool to reduce connection overhead
+    max: isServerless ? 2 : 10,
+    min: 0, // No idle connections to save resources
+    idleTimeoutMillis: 10000, // Faster cleanup (10s instead of 30s)
     connectionTimeoutMillis: 10000,
   }
 

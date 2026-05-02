@@ -6,6 +6,7 @@ import type { CreateLinkInput, UpdateLinkInput } from '~/shared/schemas/link'
 import { access_logs, links } from '~/server/database/schema'
 import { useDrizzle } from '~/server/utils/db'
 import { generateId } from '~/server/utils/id'
+import { useLinkCache, invalidateLinkCache } from '~/server/utils/cache'
 
 export type StoredLink = typeof links.$inferSelect
 
@@ -28,6 +29,16 @@ export function buildShortLink(event: H3Event, slug: string) {
 export async function getLink(event: H3Event, slug: string) {
   const runtimeConfig = useRuntimeConfig(event)
   const normalized = normalizeSlug(slug, runtimeConfig.caseSensitive)
+  const cache = useLinkCache()
+  const cacheKey = `link:${normalized}`
+
+  // Try cache first
+  const cached = cache.get(cacheKey)
+  if (cached !== null) {
+    return cached
+  }
+
+  // Cache miss - query database
   const db = await useDrizzle(event)
 
   let result
@@ -40,6 +51,9 @@ export async function getLink(event: H3Event, slug: string) {
       where: sql`lower(${links.slug}) = ${normalized}`,
     })
   }
+
+  // Cache the result (even if null to prevent repeated lookups)
+  cache.set(cacheKey, result || null, 60) // 60 second TTL
 
   return result
 }
@@ -96,6 +110,12 @@ export async function createLink(event: H3Event, input: CreateLinkInput): Promis
     })
   }
 
+  // Cache the new link
+  const runtimeConfig = useRuntimeConfig(event)
+  const cache = useLinkCache()
+  const normalized = normalizeSlug(slug, runtimeConfig.caseSensitive)
+  cache.set(`link:${normalized}`, link, 60)
+
   return link
 }
 
@@ -113,6 +133,11 @@ export async function updateLink(event: H3Event, input: UpdateLinkInput) {
     })
     .where(runtimeConfig.caseSensitive ? eq(links.slug, normalizedSlug) : sql`lower(${links.slug}) = ${normalizedSlug}`)
     .returning()
+
+  // Invalidate cache for this link
+  if (link) {
+    invalidateLinkCache(normalizedSlug, runtimeConfig.caseSensitive)
+  }
 
   return link || null
 }
@@ -169,6 +194,10 @@ export async function upsertLink(event: H3Event, input: CreateLinkInput): Promis
     })
   }
 
+  // Invalidate and update cache
+  const runtimeConfig = useRuntimeConfig(event)
+  invalidateLinkCache(slug, runtimeConfig.caseSensitive)
+
   return link
 }
 
@@ -181,6 +210,11 @@ export async function deleteLink(event: H3Event, slug: string) {
     .delete(links)
     .where(runtimeConfig.caseSensitive ? eq(links.slug, normalized) : sql`lower(${links.slug}) = ${normalized}`)
     .returning()
+
+  // Invalidate cache
+  if (deleted) {
+    invalidateLinkCache(normalized, runtimeConfig.caseSensitive)
+  }
 
   return deleted || null
 }

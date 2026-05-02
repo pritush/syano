@@ -12,7 +12,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:indexes": "node scripts/apply-performance-indexes.mjs",
-    "db:check-audit": "node scripts/check-audit-logs-table.mjs"
+    "db:check-audit": "node scripts/check-audit-logs-table.mjs",
+    "db:optimize": "node scripts/apply-indexes.mjs"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.101",

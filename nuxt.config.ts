@@ -16,6 +16,13 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui', '@nuxt/icon', '@nuxtjs/color-mode'],
   css: ['~/assets/css/tailwind.css'],
   
+  // Vite configuration
+  vite: {
+    build: {
+      sourcemap: false, // Disable sourcemaps in production to avoid warnings
+    },
+  },
+  
   // Performance optimizations
   experimental: {
     payloadExtraction: false,
@@ -39,6 +46,9 @@ export default defineNuxtConfig({
         // Scalar UI is disabled here — it's embedded in /dashboard/api-docs instead
         scalar: false,
       },
+    },
+    future: {
+      nativeSWR: true,
     },
   },
   
@@ -106,10 +116,16 @@ export default defineNuxtConfig({
       // Preload critical dashboard assets
     },
     '/api/qr/**': {
-      swr: 60 * 60 * 24 * 7,
+      isr: 60 * 60 * 24 * 7, // Cache QR codes for 7 days
       headers: {
         'cache-control': 'public, max-age=604800, immutable',
       },
+    },
+    '/api/v1/tags': {
+      isr: 180, // Cache tags list for 3 minutes
+    },
+    '/api/v1/analytics/**': {
+      isr: 300, // Cache analytics for 5 minutes
     },
     '/api/**': {
       headers: {
