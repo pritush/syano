@@ -43,6 +43,11 @@ Deploy in serverless or VPS infrastructure. Visit /dashboard to login and manage
 - ✅ **Open Source Forever** - AGPL-3.0 licensed, community-driven development
 
 ---
+## 🖼️ Screenshots
+
+![Syano Dashboard - Self-Hosted URL Shortener](https://raw.githubusercontent.com/pritush/syano/refs/heads/main/public/ghimg.jpg)
+
+---
 
 ## ✨ Complete Feature Set
 
@@ -393,21 +398,16 @@ netlify deploy --prod
 
 Experience Syano in action:
 
-**Demo Instance:** [https://syano.netlify.app](https://syano.netlify.app)
+**Demo Instance:** [https://syano.vercel.app](https://syano.vercel.app)
 
 **Test Links:**
-- https://syano.netlify.app/gmap
-- https://syano.netlify.app/smo5r
-- https://syano.netlify.app/jubfz
-- https://syano.netlify.app/klcvx
+- https://syano.vercel.app/gmap
+- https://syano.vercel.app/smo5r
+- https://syano.vercel.app/jubfz
+- https://syano.vercel.app/klcvx
 
 ---
 
-## 🖼️ Screenshots
-
-![Syano Dashboard - Self-Hosted URL Shortener](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/fcc6b6fcde2624a3cc5d80c0b25325b554c349a4/uploads/2026-04-12T11-39-00-437Z-06pwoe4r7.jpg)
-
----
 
 ### Reporting Issues
 Found a bug or have a feature request? [Open an issue](https://github.com/pritush/syano/issues) on GitHub.
