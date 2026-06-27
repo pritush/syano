@@ -91,6 +91,7 @@ export function useDashboardApi() {
     password?: string
     cloaking?: boolean
     redirect_with_query?: boolean
+    sender_id?: string | null
   }) {
     return request<{
       success: boolean
@@ -152,6 +153,7 @@ export function useDashboardApi() {
     password?: string | null
     cloaking?: boolean
     redirect_with_query?: boolean
+    sender_id?: string | null
   }) {
     return request<{
       success: boolean
@@ -451,6 +453,66 @@ export function useDashboardApi() {
     })
   }
 
+  /**
+   * Sender ID Helpers
+   */
+  async function listSenderIds() {
+    return request<{
+      success: boolean
+      data: Array<{
+        id: string
+        name: string
+        description: string | null
+        is_active: boolean
+        is_default: boolean
+        created_at: string
+      }>
+    }>('/api/v1/sender-ids')
+  }
+
+  async function createSenderId(data: { name: string; description?: string | null; is_default?: boolean }) {
+    return request<{
+      success: boolean
+      data: {
+        id: string
+        name: string
+        description: string | null
+        is_active: boolean
+        is_default: boolean
+        created_at: string
+      }
+    }>('/api/v1/sender-ids', {
+      method: 'POST',
+      body: data,
+    })
+  }
+
+  async function updateSenderId(id: string, data: { name?: string; description?: string | null; is_active?: boolean; is_default?: boolean }) {
+    return request<{
+      success: boolean
+      data: {
+        id: string
+        name: string
+        description: string | null
+        is_active: boolean
+        is_default: boolean
+        created_at: string
+      }
+    }>(`/api/v1/sender-ids/${id}`, {
+      method: 'PATCH',
+      body: data,
+    })
+  }
+
+  async function deleteSenderId(id: string) {
+    return request<{
+      success: boolean
+      message: string
+    }>(`/api/v1/sender-ids/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
   return {
     request,
     // V1 API helpers
@@ -474,5 +536,10 @@ export function useDashboardApi() {
     getAnalyticsEvents,
     getAnalyticsLocations,
     getQrScans,
+    // Sender ID helpers
+    listSenderIds,
+    createSenderId,
+    updateSenderId,
+    deleteSenderId,
   }
 }

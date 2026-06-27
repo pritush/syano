@@ -56,6 +56,7 @@ export function createLinkSchema(defaultSlugLength: number) {
     expiration: expirationSchema,
     tag_id: z.string().trim().min(1).max(64).nullish().transform((value) => value || null),
     slug_length: z.number().int().min(3).max(32).default(defaultSlugLength),
+    sender_id: z.string().uuid().nullish().transform((value) => value || null),
   })
 }
 
@@ -74,6 +75,7 @@ export const updateLinkSchema = z.object({
   unsafe: z.boolean().optional(),
   expiration: expirationSchema.optional(),
   tag_id: z.string().trim().min(1).max(64).nullable().optional(),
+  sender_id: z.string().uuid().nullable().optional(),
 })
 
 export const deleteLinkSchema = z.object({

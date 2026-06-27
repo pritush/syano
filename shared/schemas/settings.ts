@@ -38,6 +38,7 @@ export const SiteSettingsSchema = z.object({
     links: [],
     socials: [],
   }),
+  trai_sms_enabled: z.boolean().default(false),
 })
 
 export type HomepageMode = z.infer<typeof HomepageModeSchema>
@@ -59,6 +60,7 @@ export function createDefaultSiteSettings(): SiteSettings {
       links: [],
       socials: [],
     },
+    trai_sms_enabled: false,
   })
 }
 

@@ -56,6 +56,7 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 ### 🔗 Advanced Link Management
 
 **Smart URL Shortening**
+- Intelligent slug suggestions based on URL analysis (combines domain & path consonants for meaningful abbreviations like `gla` or `gledr`)
 - Custom slugs or auto-generated short links
 - Live preview before saving
 - Bulk import/export (JSON format)
@@ -63,6 +64,7 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 - Tag-based organization and filtering
 
 **Marketing & Campaign Tools**
+- Custom TRAI India SMS compliance Sender IDs with default selection support
 - Built-in UTM parameter builder
 - Link expiration scheduling
 - Password-protected links

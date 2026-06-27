@@ -8,6 +8,13 @@
       "when": 1775892601276,
       "tag": "0000_dark_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782554835985,
+      "tag": "0001_stormy_vector",
+      "breakpoints": true
     }
   ]
 }

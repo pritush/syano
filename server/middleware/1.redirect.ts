@@ -49,11 +49,28 @@ export default defineEventHandler(async (event) => {
   }
 
   const segments = requestUrl.pathname.split('/').filter(Boolean)
-  if (segments.length !== 1) {
+  if (segments.length !== 1 && segments.length !== 2) {
     return
   }
 
-  const slug = decodeURIComponent(segments[0] || '')
+  // For two-segment paths, check if first segment is a sender ID (6 uppercase letters)
+  // e.g., /SENDER/x10sd — the sender ID prefix is purely for TRAI compliance routing
+  const SENDER_ID_PATTERN = /^[A-Z]{6}$/
+  let slug: string
+
+  if (segments.length === 2) {
+    const possibleSenderId = segments[0] || ''
+    const possibleSlug = segments[1] || ''
+
+    if (!SENDER_ID_PATTERN.test(possibleSenderId)) {
+      return // Not a sender-id/slug pattern, let Nuxt handle it
+    }
+
+    slug = decodeURIComponent(possibleSlug)
+  } else {
+    slug = decodeURIComponent(segments[0] || '')
+  }
+
   const appConfig = useAppConfig()
   const slugRegexSource = typeof appConfig.slugRegex === 'string' ? appConfig.slugRegex : '^[A-Za-z0-9_-]+$'
   const reserveSlug = Array.isArray(appConfig.reserveSlug) ? appConfig.reserveSlug : []
@@ -102,7 +119,7 @@ export default defineEventHandler(async (event) => {
   let destination = resolveDestination(link, ua)
 
   const alwaysForward = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref']
-  
+
   if (runtimeConfig.redirectWithQuery || link.redirect_with_query) {
     destination = appendRequestQuery(destination, requestUrl)
   } else {

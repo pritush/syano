@@ -21,8 +21,11 @@ export function normalizeSlug(slug: string, caseSensitive = false) {
   return caseSensitive ? trimmed : trimmed.toLowerCase()
 }
 
-export function buildShortLink(event: H3Event, slug: string) {
+export function buildShortLink(event: H3Event, slug: string, senderIdName?: string | null) {
   const requestUrl = getRequestURL(event)
+  if (senderIdName) {
+    return `${requestUrl.origin}/${senderIdName}/${slug}`
+  }
   return `${requestUrl.origin}/${slug}`
 }
 
@@ -99,6 +102,7 @@ export async function createLink(event: H3Event, input: CreateLinkInput): Promis
       unsafe: input.unsafe,
       expiration: input.expiration,
       tag_id: input.tag_id,
+      sender_id: input.sender_id,
       updated_at: new Date(),
     })
     .returning()
@@ -164,6 +168,7 @@ export async function upsertLink(event: H3Event, input: CreateLinkInput): Promis
       unsafe: input.unsafe,
       expiration: input.expiration,
       tag_id: input.tag_id,
+      sender_id: input.sender_id,
       updated_at: new Date(),
     })
     .onConflictDoUpdate({
@@ -182,6 +187,7 @@ export async function upsertLink(event: H3Event, input: CreateLinkInput): Promis
         unsafe: input.unsafe,
         expiration: input.expiration,
         tag_id: input.tag_id,
+        sender_id: input.sender_id,
         updated_at: new Date(),
       },
     })
@@ -255,6 +261,7 @@ export async function listLinks(
       password: links.password,
       unsafe: links.unsafe,
       tag_id: links.tag_id,
+      sender_id: links.sender_id,
       expiration: links.expiration,
       created_at: links.created_at,
       updated_at: links.updated_at,

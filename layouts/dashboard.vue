@@ -53,6 +53,12 @@ const navigation = computed(() => {
       show: isRoot.value || can(PERMISSIONS.SETTINGS_MANAGE),
     },
     {
+      label: 'URL Sender ID',
+      to: '/dashboard/sender-ids',
+      icon: 'lucide:radio-tower',
+      show: isRoot.value || can(PERMISSIONS.SETTINGS_MANAGE),
+    },
+    {
       label: 'User Management',
       to: '/dashboard/users',
       icon: 'lucide:users',

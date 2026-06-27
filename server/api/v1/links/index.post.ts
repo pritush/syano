@@ -4,6 +4,10 @@ import { requireUnifiedAuth, requireUnifiedPermission } from '~/server/utils/uni
 import { checkRateLimit } from '~/server/utils/rate-limit'
 import { buildShortLink, createLink, getLink } from '~/server/utils/link-store'
 import { createLinkSchema } from '~/shared/schemas/link'
+import { loadSiteSettingsForHomepage } from '~/server/utils/site-settings'
+import { useDrizzle } from '~/server/utils/db'
+import { sender_ids } from '~/server/database/schema'
+import { eq } from 'drizzle-orm'
 
 defineRouteMeta({
   openAPI: {
@@ -169,6 +173,43 @@ export default defineEventHandler(async (event) => {
   
   const data = validation.data
 
+  // Validate sender_id if TRAI mode is enabled
+  let senderIdName: string | null = null
+  if (data.sender_id) {
+    const db = await useDrizzle(event)
+    const senderId = await db.query.sender_ids.findFirst({
+      where: eq(sender_ids.id, data.sender_id),
+    })
+
+    if (!senderId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Bad Request',
+        message: 'Invalid sender ID — the specified sender ID does not exist',
+      })
+    }
+
+    if (!senderId.is_active) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Bad Request',
+        message: `Sender ID '${senderId.name}' is inactive`,
+      })
+    }
+
+    senderIdName = senderId.name
+  } else {
+    // Check if TRAI mode is on and sender_id is required
+    const settings = await loadSiteSettingsForHomepage(event)
+    if (settings.trai_sms_enabled) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Bad Request',
+        message: 'TRAI SMS Compliance is enabled — a sender ID is required when creating links',
+      })
+    }
+  }
+
   if (data.slug && await getLink(event, data.slug)) {
     throw createError({
       statusCode: 409,
@@ -185,11 +226,13 @@ export default defineEventHandler(async (event) => {
       id: link.id,
       slug: link.slug,
       url: link.url,
-      short_url: buildShortLink(event, link.slug),
+      short_url: buildShortLink(event, link.slug, senderIdName),
       title: link.title,
       description: link.description,
       comment: link.comment,
       tag_id: link.tag_id,
+      sender_id: link.sender_id,
+      sender_id_name: senderIdName,
       expiration: link.expiration,
       cloaking: link.cloaking,
       redirect_with_query: link.redirect_with_query,

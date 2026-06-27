@@ -28,11 +28,12 @@ export async function loadSiteSettingsForHomepage(event?: H3Event): Promise<Site
 
   const settings = row
     ? normalizeSiteSettings({
-        homepage_mode: row.homepage_mode,
-        redirect_url: row.redirect_url,
-        redirect_timeout: row.redirect_timeout,
-        bio_content: row.bio_content,
-      })
+      homepage_mode: row.homepage_mode,
+      redirect_url: row.redirect_url,
+      redirect_timeout: row.redirect_timeout,
+      bio_content: row.bio_content,
+      trai_sms_enabled: row.trai_sms_enabled,
+    })
     : createDefaultSiteSettings()
 
   // Cache for 5 minutes
@@ -53,6 +54,7 @@ export async function saveSiteSettings(event: H3Event, input: SiteSettings) {
       redirect_url: payload.redirect_url,
       redirect_timeout: payload.redirect_timeout,
       bio_content: payload.bio_content,
+      trai_sms_enabled: payload.trai_sms_enabled,
     })
     .onConflictDoUpdate({
       target: site_settings.id,
@@ -61,6 +63,7 @@ export async function saveSiteSettings(event: H3Event, input: SiteSettings) {
         redirect_url: payload.redirect_url,
         redirect_timeout: payload.redirect_timeout,
         bio_content: payload.bio_content,
+        trai_sms_enabled: payload.trai_sms_enabled,
       },
     })
 

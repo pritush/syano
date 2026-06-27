@@ -11,6 +11,8 @@ useHead({
   ],
 })
 
+import type { SiteSettings } from '~/shared/schemas/settings'
+
 const router = useRouter()
 const api = useDashboardApi()
 
@@ -18,6 +20,12 @@ type TagItem = {
   id: string
   name: string
   link_count: number
+}
+
+type SenderIdItem = {
+  id: string
+  name: string
+  is_active: boolean
 }
 
 type LinkForm = {
@@ -29,6 +37,7 @@ type LinkForm = {
   password: string
   expiration: string
   tagId: string
+  senderId: string
   cloaking: boolean
   redirectWithQuery: boolean
   unsafe: boolean
@@ -36,11 +45,14 @@ type LinkForm = {
 
 const tags = ref<TagItem[]>([])
 const loadingTags = ref(true)
+const senderIds = ref<SenderIdItem[]>([])
+const loadingSenderIds = ref(false)
+const traiEnabled = ref(false)
 const saving = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 const copied = ref(false)
-const createdLink = ref<{ slug: string; url: string } | null>(null)
+const createdLink = ref<{ slug: string; url: string; short_url: string } | null>(null)
 const qrModalOpen = ref(false)
 
 // Accordion toggles
@@ -57,6 +69,7 @@ const form = reactive<LinkForm>({
   password: '',
   expiration: '',
   tagId: '',
+  senderId: '',
   cloaking: false,
   redirectWithQuery: false,
   unsafe: false,
@@ -83,6 +96,10 @@ watch(() => form.url, (newUrl) => {
     utm.referral = urlObj.searchParams.get('ref') || ''
   } catch {
     // invalid url
+  }
+  
+  if (isSlugPristine.value && newUrl) {
+    generateSlug(true)
   }
 })
 
@@ -111,30 +128,107 @@ watch(utm, () => {
 }, { deep: true })
 
 
-function generateSlug() {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+const isSlugPristine = ref(true)
+
+function generateSlug(fromUrl = false) {
   let result = ''
-  for (let i = 0; i < 5; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  
+  if (fromUrl === true && form.url) {
+    try {
+      const url = new URL(form.url)
+      const host = url.hostname.replace(/^www\./, '').split('.')[0]
+      const path = url.pathname.replace(/^\//, '').replace(/\/$/, '').split('/')
+      const lastPath = path[path.length - 1]
+      
+      const domain = host ? host.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : ''
+      let pathName = ''
+      if (lastPath && !lastPath.includes('.')) {
+        pathName = lastPath.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+      }
+
+      let basePrefix = ''
+      
+      if (domain && pathName) {
+        // Extract consonants for smarter abbreviations
+        const dConsonants = domain.replace(/[aeiou]/g, '')
+        const pConsonants = pathName.replace(/[aeiou]/g, '')
+        
+        // Format 1: e.g. domain[0] + last consonant + path[0] (google + android -> gla)
+        const format1 = domain.charAt(0) + 
+                       (dConsonants.length > 2 ? dConsonants.charAt(dConsonants.length - 1) : (domain.charAt(1) || '')) + 
+                       pathName.charAt(0)
+                       
+        // Format 2: e.g. domain[0] + domain consonant + domain last + path consonants (google + android -> glend / gledr)
+        const format2 = domain.charAt(0) + 
+                       (dConsonants.length > 1 ? dConsonants.charAt(dConsonants.length - 1) : '') + 
+                       domain.slice(-1) + 
+                       (pConsonants.length > 0 ? pConsonants.charAt(pConsonants.length > 2 ? 1 : 0) : '') +
+                       (pConsonants.length > 1 ? pConsonants.charAt(pConsonants.length > 2 ? 2 : 1) : '')
+                       
+        // Pick one of the formats
+        basePrefix = Math.random() > 0.5 ? format1 : format2
+        basePrefix = basePrefix.substring(0, 5)
+      } else if (pathName && pathName.length >= 3) {
+        basePrefix = pathName.substring(0, 3)
+      } else if (domain) {
+        basePrefix = domain.substring(0, 3)
+      }
+      
+      if (basePrefix.length > 0) {
+        result = basePrefix
+        // Pad with random characters to ensure uniqueness and reach minimum length
+        while (result.length < 5) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+      }
+    } catch {
+      // invalid URL, ignore
+    }
   }
+
+  // Fallback to purely random if smart generation failed or wasn't requested
+  if (!result) {
+    for (let i = 0; i < 5; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+  }
+  
   form.slug = result
+  isSlugPristine.value = true
 }
 
 // Generate slug on mount
 onMounted(async () => {
   generateSlug()
-  await loadTags()
+  await loadTagsAndSettings()
 })
 
-async function loadTags() {
+async function loadTagsAndSettings() {
   loadingTags.value = true
+  loadingSenderIds.value = true
   try {
-    const response = await api.listTags()
-    tags.value = response.data
+    const [settings, tagsResponse] = await Promise.all([
+      $fetch<SiteSettings>('/api/settings'),
+      api.listTags(),
+    ])
+    traiEnabled.value = settings.trai_sms_enabled
+    tags.value = tagsResponse.data
+
+    if (traiEnabled.value) {
+      const sendersResponse = await api.listSenderIds()
+      senderIds.value = sendersResponse.data.filter((s: any) => s.is_active)
+      
+      const defaultSender = senderIds.value.find((s: any) => s.is_default)
+      if (defaultSender) {
+        form.senderId = defaultSender.id
+      }
+    }
   } catch {
     // silent
   } finally {
     loadingTags.value = false
+    loadingSenderIds.value = false
   }
 }
 
@@ -152,6 +246,10 @@ function buildPayload() {
   // Optional fields
   if (form.tagId) {
     payload.tag_id = form.tagId
+  }
+
+  if (traiEnabled.value && form.senderId) {
+    payload.sender_id = form.senderId
   }
 
   if (showExpiration.value && form.expiration) {
@@ -185,6 +283,11 @@ async function submit() {
     return
   }
 
+  if (traiEnabled.value && !form.senderId) {
+    errorMessage.value = 'Please select a Sender ID (TRAI SMS Compliance is enabled).'
+    return
+  }
+
   saving.value = true
   errorMessage.value = ''
   statusMessage.value = ''
@@ -195,6 +298,7 @@ async function submit() {
     createdLink.value = {
       slug: response.data.slug,
       url: response.data.url,
+      short_url: response.data.short_url,
     }
     statusMessage.value = `Link created successfully!`
   } catch (error: any) {
@@ -206,7 +310,7 @@ async function submit() {
 
 async function copyShortLink() {
   if (!import.meta.client || !createdLink.value) return
-  await navigator.clipboard.writeText(`${window.location.origin}/${createdLink.value.slug}`)
+  await navigator.clipboard.writeText(createdLink.value.short_url)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
@@ -223,19 +327,23 @@ function createAnother() {
   form.password = ''
   form.expiration = ''
   form.tagId = ''
+  form.senderId = ''
   form.cloaking = false
   form.redirectWithQuery = false
   form.unsafe = false
   generateSlug()
 }
 
-const shortLinkPreview = computed(() => {
+const selectedSender = computed(() => senderIds.value.find(s => s.id === form.senderId))
+
+const slugPrefix = computed(() => {
   if (!import.meta.client) return ''
+  const prefix = traiEnabled.value && selectedSender.value ? `${selectedSender.value.name}/` : ''
   try {
     const origin = window.location.origin
-    return `${origin}/${form.slug || '...'}`
+    return `${origin}/${prefix}`
   } catch {
-    return `/${form.slug || '...'}`
+    return `/${prefix}`
   }
 })
 </script>
@@ -276,7 +384,7 @@ const shortLinkPreview = computed(() => {
       <div class="sy-success-link-box">
         <div class="sy-success-link-row">
           <UIcon name="lucide:globe" class="h-5 w-5 text-brand-600 shrink-0" />
-          <span class="sy-success-link-text">{{ `${$router.options.history.base || ''}/${createdLink.slug}` }}</span>
+          <span class="sy-success-link-text">{{ createdLink.short_url }}</span>
           <button type="button" class="sy-success-copy-btn" @click="copyShortLink">
             <UIcon v-if="!copied" name="lucide:copy" class="h-4 w-4" />
             <UIcon v-else name="lucide:check" class="h-4 w-4 text-brand-600" />
@@ -340,6 +448,24 @@ const shortLinkPreview = computed(() => {
             </div>
           </div>
 
+          <!-- TRAI Sender ID (Conditional) -->
+          <div v-if="traiEnabled" class="sy-field">
+            <label class="sy-field-label" for="create-sender-id">
+              <UIcon name="lucide:radio-tower" class="h-4 w-4" />
+              Sender ID
+              <span class="sy-field-required">*</span>
+            </label>
+            <div class="sy-input-wrap">
+              <SySelect
+                id="create-sender-id"
+                v-model="form.senderId"
+                :options="[{ label: 'Select Sender ID...', value: '' }, ...senderIds.map(s => ({ label: s.name, value: s.id }))]"
+                buttonClass="sy-select justify-between"
+              />
+            </div>
+            <p class="sy-field-hint text-amber-600 dark:text-amber-500">TRAI SMS Compliance is enabled. A Sender ID is required.</p>
+          </div>
+
           <!-- Short Link Preview + Slug -->
           <div class="sy-field">
             <label class="sy-field-label" for="create-slug">
@@ -348,7 +474,7 @@ const shortLinkPreview = computed(() => {
             <div class="sy-slug-container">
               <div class="sy-slug-preview">
                 <UIcon name="lucide:link-2" class="h-4 w-4 text-slate-400 shrink-0" />
-                <span class="sy-slug-domain">{{ shortLinkPreview.split('/').slice(0, 3).join('/') }}/</span>
+                <span class="sy-slug-domain">{{ slugPrefix }}</span>
               </div>
               <div class="sy-slug-input-group">
                 <input
@@ -358,12 +484,13 @@ const shortLinkPreview = computed(() => {
                   class="sy-slug-input"
                   placeholder="abc12"
                   maxlength="128"
+                  @input="isSlugPristine = false"
                 />
                 <button
                   type="button"
                   class="sy-slug-regen"
                   title="Generate random slug"
-                  @click="generateSlug"
+                  @click="() => generateSlug(false)"
                 >
                   <UIcon name="lucide:refresh-cw" class="h-4 w-4" />
                 </button>

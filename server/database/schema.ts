@@ -1,10 +1,19 @@
-import { bigint, boolean, doublePrecision, inet, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, boolean, doublePrecision, inet, jsonb, pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core'
 
 export const tags = pgTable('tags', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
   name: varchar('name', { length: 120 }).notNull(),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
+
+export const sender_ids = pgTable('sender_ids', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 6 }).notNull(),
+  description: text('description'),
+  is_active: boolean('is_active').default(true),
+  is_default: boolean('is_default').default(false),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+}, (table) => [uniqueIndex('sender_ids_name_unique').on(table.name)])
 
 export const links = pgTable('links', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
@@ -24,6 +33,7 @@ export const links = pgTable('links', {
   password: text('password'),
   unsafe: boolean('unsafe').default(false),
   tag_id: varchar('tag_id', { length: 64 }).references(() => tags.id, { onDelete: 'set null' }),
+  sender_id: uuid('sender_id').references(() => sender_ids.id, { onDelete: 'set null' }),
 })
 
 export const access_logs = pgTable('access_logs', {
@@ -60,6 +70,7 @@ export const site_settings = pgTable('site_settings', {
   redirect_url: varchar('redirect_url', { length: 2048 }),
   redirect_timeout: bigint('redirect_timeout', { mode: 'number' }).default(3),
   bio_content: jsonb('bio_content'),
+  trai_sms_enabled: boolean('trai_sms_enabled').default(false),
 })
 
 export const qr_scans = pgTable('qr_scans', {

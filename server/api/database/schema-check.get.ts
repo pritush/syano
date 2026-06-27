@@ -82,6 +82,30 @@ export default defineEventHandler(async (event) => {
     `)
     const hasPerfIndexes = perfIndexCheck.rows[0]?.exists
 
+    const senderIdsCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'sender_ids'
+      );
+    `)
+    const hasSenderIds = senderIdsCheck.rows[0]?.exists
+
+    const traiEnabledCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_name = 'site_settings' AND column_name = 'trai_sms_enabled'
+      );
+    `)
+    const hasTraiEnabled = traiEnabledCheck.rows[0]?.exists
+
+    const isDefaultCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_name = 'sender_ids' AND column_name = 'is_default'
+      );
+    `)
+    const hasIsDefault = isDefaultCheck.rows[0]?.exists
+
     const missing = []
     if (!hasQrScans) missing.push('New table for tracking QR code scans')
     if (!hasTimeout) missing.push('New redirect delay configuration field')
@@ -92,9 +116,12 @@ export default defineEventHandler(async (event) => {
     if (!hasRateLimits) missing.push('API rate limits table for API throttling')
     if (!hasKeyEncrypted) missing.push('API key encryption column for reveal feature')
     if (!hasPerfIndexes) missing.push('Performance optimization indexes (60-80% CPU reduction)')
+    if (!hasSenderIds) missing.push('Sender IDs table for TRAI SMS compliance')
+    if (!hasTraiEnabled) missing.push('TRAI SMS compliance setting field')
+    if (!hasIsDefault) missing.push('Default Sender ID feature flag')
 
     return {
-      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs && hasApiKeys && hasRateLimits && hasKeyEncrypted && hasPerfIndexes,
+      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs && hasApiKeys && hasRateLimits && hasKeyEncrypted && hasPerfIndexes && hasSenderIds && hasTraiEnabled && hasIsDefault,
       missing
     }
   } catch (err: any) {

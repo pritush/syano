@@ -180,6 +180,48 @@ export default defineEventHandler(async (event) => {
       CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window_start ON api_rate_limits(window_start);
     `)
 
+    // 16. TRAI SMS Compliance
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "sender_ids" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "name" varchar(6) NOT NULL,
+        "description" text,
+        "is_active" boolean DEFAULT true,
+        "is_default" boolean DEFAULT false,
+        "created_at" timestamp with time zone DEFAULT now()
+      );
+    `)
+
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE "sender_ids" ADD COLUMN "is_default" boolean DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    `)
+
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE "links" ADD COLUMN "sender_id" uuid;
+      EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    `)
+
+    await db.execute(sql`
+      DO $$ BEGIN
+        ALTER TABLE "site_settings" ADD COLUMN "trai_sms_enabled" boolean DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+    `)
+
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS "sender_ids_name_unique" ON "sender_ids" USING btree ("name");
+    `)
+
+    await db.execute(sql`
+      DO $$ BEGIN
+       ALTER TABLE "links" ADD CONSTRAINT "links_sender_id_sender_ids_id_fk" FOREIGN KEY ("sender_id") REFERENCES "public"."sender_ids"("id") ON DELETE set null ON UPDATE no action;
+      EXCEPTION
+       WHEN duplicate_object THEN null;
+      END $$;
+    `)
+
     // ============================================================================
     // 16. PERFORMANCE OPTIMIZATION INDEXES (NeonDB Free Tier Optimization)
     // ============================================================================
