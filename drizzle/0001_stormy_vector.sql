@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS "sender_ids" (
 	"name" varchar(6) NOT NULL,
 	"description" text,
 	"is_active" boolean DEFAULT true,
+	"is_default" boolean DEFAULT false,
 	"created_at" timestamp with time zone DEFAULT now()
 );
 --> statement-breakpoint

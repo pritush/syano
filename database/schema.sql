@@ -11,6 +11,17 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Sender IDs table for TRAI India SMS compliance
+CREATE TABLE IF NOT EXISTS sender_ids (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(6) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sender_ids_name_unique ON sender_ids(name);
+
 -- Links table for shortened URLs
 CREATE TABLE IF NOT EXISTS links (
     id VARCHAR(64) PRIMARY KEY NOT NULL,
@@ -29,7 +40,8 @@ CREATE TABLE IF NOT EXISTS links (
     redirect_with_query BOOLEAN DEFAULT FALSE,
     password TEXT,
     unsafe BOOLEAN DEFAULT FALSE,
-    tag_id VARCHAR(64) REFERENCES tags(id) ON DELETE SET NULL
+    tag_id VARCHAR(64) REFERENCES tags(id) ON DELETE SET NULL,
+    sender_id UUID REFERENCES sender_ids(id) ON DELETE SET NULL
 );
 
 -- Access logs table for analytics
@@ -75,7 +87,8 @@ CREATE TABLE IF NOT EXISTS site_settings (
     homepage_mode VARCHAR(20),
     redirect_url VARCHAR(2048),
     redirect_timeout BIGINT DEFAULT 3,
-    bio_content JSONB
+    bio_content JSONB,
+    trai_sms_enabled BOOLEAN DEFAULT FALSE
 );
 
 -- Users table for dashboard user management

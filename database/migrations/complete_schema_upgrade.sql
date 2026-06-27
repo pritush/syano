@@ -143,6 +143,32 @@ CREATE INDEX IF NOT EXISTS idx_api_rate_limits_api_key_id ON api_rate_limits(api
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window_start ON api_rate_limits(window_start);
 
 -- ============================================================================
+-- 10. TRAI SMS Compliance & Sender IDs
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "sender_ids" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "name" varchar(6) NOT NULL,
+    "description" text,
+    "is_active" boolean DEFAULT true,
+    "is_default" boolean DEFAULT false,
+    "created_at" timestamp with time zone DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "sender_ids_name_unique" ON "sender_ids" USING btree ("name");
+
+DO $$ BEGIN
+    ALTER TABLE "sender_ids" ADD COLUMN "is_default" boolean DEFAULT false;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "links" ADD COLUMN "sender_id" uuid REFERENCES "sender_ids"("id") ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE "site_settings" ADD COLUMN "trai_sms_enabled" boolean DEFAULT false;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ============================================================================
 -- Verification Queries
 -- ============================================================================
 
