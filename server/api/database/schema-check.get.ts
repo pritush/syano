@@ -102,11 +102,10 @@ export default defineEventHandler(async (event) => {
     `)
     const hasKeyEncrypted = keyEncryptedCheck.rows[0]?.exists
 
-    // Check for performance optimization indexes (NeonDB optimization)
     const perfIndexCheck = await db.execute(sql`
       SELECT EXISTS (
         SELECT FROM pg_indexes 
-        WHERE tablename = 'links' AND indexname = 'idx_links_slug_lower'
+        WHERE tablename = 'links' AND indexname = 'idx_links_slug'
       );
     `)
     const hasPerfIndexes = perfIndexCheck.rows[0]?.exists
@@ -144,7 +143,7 @@ export default defineEventHandler(async (event) => {
     if (!hasApiKeys) missing.push('API keys table for REST API authentication')
     if (!hasRateLimits) missing.push('API rate limits table for API throttling')
     if (!hasKeyEncrypted) missing.push('API key encryption column for reveal feature')
-    if (!hasPerfIndexes) missing.push('Performance optimization indexes (60-80% CPU reduction)')
+    if (!hasPerfIndexes) missing.push('Query performance indexes')
     if (!hasSenderIds) missing.push('Sender IDs table for TRAI SMS compliance')
     if (!hasTraiEnabled) missing.push('TRAI SMS compliance setting field')
     if (!hasIsDefault) missing.push('Default Sender ID feature flag')

@@ -1,10 +1,7 @@
 -- Performance indexes for NeonDB optimization
 -- Run this script to add indexes that will significantly improve query performance
 
--- Index for case-insensitive slug lookups (most critical for redirects)
-CREATE INDEX IF NOT EXISTS idx_links_slug_lower ON links(LOWER(slug));
-
--- Index for slug lookups (case-sensitive mode)
+-- Index for case-insensitive slug lookups (slugs stored lowercase)
 CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug);
 
 -- Indexes for analytics queries on access_logs

@@ -36,10 +36,9 @@ const indexes = [
     description: 'Composite index for tag filtering',
   },
   {
-    name: 'idx_links_active',
-    sql: `CREATE INDEX IF NOT EXISTS idx_links_active ON links(created_at DESC) 
-          WHERE expiration IS NULL OR expiration > EXTRACT(EPOCH FROM NOW()) * 1000`,
-    description: 'Partial index for active links',
+    name: 'idx_links_expiration',
+    sql: 'CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL',
+    description: 'Partial index for link expiration checks',
   },
 ]
 

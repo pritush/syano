@@ -81,10 +81,15 @@ async function upgradeSchema() {
   errorMessage.value = ''
   
   try {
-    const res = await api.request<{ success: boolean; message: string; error?: string }>('/api/database/upgrade', { method: 'POST' })
+    const res = await api.request<{ success: boolean; message: string; error?: string; warnings?: string[] }>('/api/database/upgrade', { method: 'POST' })
     if (res.success) {
       statusMessage.value = res.message || 'Database schema successfully updated.'
-      toasts.success('Upgrade completed', res.message)
+      if (res.warnings?.length) {
+        statusMessage.value = `${res.message}\n\n${res.warnings.join('\n')}`
+        toasts.success('Upgrade completed', `${res.warnings.length} index(es) could not be created — see status for details`)
+      } else {
+        toasts.success('Upgrade completed', res.message)
+      }
       await checkSchema()
     } else {
       throw new Error(res.error)

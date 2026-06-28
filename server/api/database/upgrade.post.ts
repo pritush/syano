@@ -1,12 +1,24 @@
 import { defineEventHandler } from 'h3'
 import { sql } from 'drizzle-orm'
+import { useRuntimeConfig } from '#imports'
 import { useDrizzle } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
 
+type DrizzleDb = Awaited<ReturnType<typeof useDrizzle>>
+
+async function createIndexSafe(db: DrizzleDb, name: string, statement: string, warnings: string[]) {
+  try {
+    await db.execute(sql.raw(statement))
+  } catch (err: any) {
+    warnings.push(`${name}: ${err.message || 'Unknown error'}`)
+  }
+}
+
 export default defineEventHandler(async (event) => {
   await requirePermission(event, PERMISSIONS.DATA_MANAGE)
   const db = await useDrizzle(event)
+  const indexWarnings: string[] = []
 
   try {
     // 1. Create the new table for tracking QR code scans
@@ -218,81 +230,50 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // ============================================================================
-    // 16. PERFORMANCE OPTIMIZATION INDEXES (NeonDB Free Tier Optimization)
-    // ============================================================================
-    // These indexes reduce database CPU usage by 60-80% and improve query speed
-    // by 10-100x for common operations. See OPTIMIZATION.md for details.
+    // 17. Query performance indexes (plain column indexes only — no expression indexes)
+    const runtimeConfig = useRuntimeConfig(event)
+    if (!runtimeConfig.caseSensitive) {
+      await db.execute(sql`
+        UPDATE links SET slug = LOWER(TRIM(slug)) WHERE slug <> LOWER(TRIM(slug))
+      `)
+    }
 
-    // Critical: Case-insensitive slug lookups (10-100x faster redirects)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_links_slug_lower ON links(LOWER(slug));
-    `)
+    await db.execute(sql`DROP INDEX IF EXISTS idx_links_slug_lower`)
 
-    // Analytics query optimization (5-50x faster)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC);
-    `)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC);
-    `)
+    const performanceIndexes = [
+      ['idx_links_slug', 'CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug)'],
+      ['idx_access_logs_slug_date', 'CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC)'],
+      ['idx_access_logs_link_date', 'CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC)'],
+      ['idx_access_logs_browser', 'CREATE INDEX IF NOT EXISTS idx_access_logs_browser ON access_logs(browser_type) WHERE browser_type IS NOT NULL'],
+      ['idx_access_logs_device', 'CREATE INDEX IF NOT EXISTS idx_access_logs_device ON access_logs(device_type) WHERE device_type IS NOT NULL'],
+      ['idx_access_logs_os', 'CREATE INDEX IF NOT EXISTS idx_access_logs_os ON access_logs(os) WHERE os IS NOT NULL'],
+      ['idx_access_logs_referer', 'CREATE INDEX IF NOT EXISTS idx_access_logs_referer ON access_logs(referer) WHERE referer IS NOT NULL'],
+      ['idx_qr_scans_link_date', 'CREATE INDEX IF NOT EXISTS idx_qr_scans_link_date ON qr_scans(link_id, created_at DESC)'],
+      ['idx_qr_scans_slug', 'CREATE INDEX IF NOT EXISTS idx_qr_scans_slug ON qr_scans(slug)'],
+      ['idx_links_tag_id_filter', 'CREATE INDEX IF NOT EXISTS idx_links_tag_id_filter ON links(tag_id) WHERE tag_id IS NOT NULL'],
+      ['idx_links_expiration', 'CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL'],
+      ['idx_api_rate_limits_key_endpoint', 'CREATE INDEX IF NOT EXISTS idx_api_rate_limits_key_endpoint ON api_rate_limits(api_key_id, endpoint, window_start)'],
+      ['idx_links_id_tag', 'CREATE INDEX IF NOT EXISTS idx_links_id_tag ON links(id DESC, tag_id)'],
+      ['idx_audit_logs_actor_id', 'CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id)'],
+    ] as const
 
-    // Partial indexes for analytics aggregations (faster WHERE clauses)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_browser ON access_logs(browser_type) WHERE browser_type IS NOT NULL;
-    `)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_device ON access_logs(device_type) WHERE device_type IS NOT NULL;
-    `)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_os ON access_logs(os) WHERE os IS NOT NULL;
-    `)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_access_logs_referer ON access_logs(referer) WHERE referer IS NOT NULL;
-    `)
+    for (const [name, statement] of performanceIndexes) {
+      await createIndexSafe(db, name, statement, indexWarnings)
+    }
 
-    // QR scans optimization
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_qr_scans_link_date ON qr_scans(link_id, created_at DESC);
-    `)
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_qr_scans_slug ON qr_scans(slug);
-    `)
+    for (const table of ['links', 'access_logs', 'qr_scans', 'tags', 'api_keys', 'api_rate_limits'] as const) {
+      await db.execute(sql.raw(`ANALYZE ${table}`))
+    }
 
-    // Tag filtering optimization
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_links_tag_id_filter ON links(tag_id) WHERE tag_id IS NOT NULL;
-    `)
+    const message = indexWarnings.length
+      ? `Database schema upgraded with ${indexWarnings.length} index warning(s).`
+      : 'Database schema upgraded successfully!'
 
-    // Link expiration checks
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL;
-    `)
-
-    // API rate limiting optimization
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_api_rate_limits_key_endpoint ON api_rate_limits(api_key_id, endpoint, window_start);
-    `)
-
-    // Composite index for link listing with tag filter
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_links_id_tag ON links(id DESC, tag_id);
-    `)
-
-    // Audit logs optimization
-    await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id);
-    `)
-
-    // Analyze tables to update query planner statistics
-    await db.execute(sql`ANALYZE links;`)
-    await db.execute(sql`ANALYZE access_logs;`)
-    await db.execute(sql`ANALYZE qr_scans;`)
-    await db.execute(sql`ANALYZE tags;`)
-    await db.execute(sql`ANALYZE api_keys;`)
-    await db.execute(sql`ANALYZE api_rate_limits;`)
-
-    return { success: true, message: 'Database schema upgraded successfully!' }
+    return {
+      success: true,
+      message,
+      warnings: indexWarnings.length ? indexWarnings : undefined,
+    }
   } catch (err: any) {
     return { success: false, error: err.message || 'Unknown error occurred during migration.' }
   }

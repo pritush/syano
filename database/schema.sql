@@ -199,18 +199,9 @@ CREATE INDEX IF NOT EXISTS idx_access_logs_slug_created ON access_logs(slug, cre
 CREATE INDEX IF NOT EXISTS idx_links_tag_created ON links(tag_id, created_at DESC);
 
 -- Partial indexes for filtered queries (Performance Optimization)
-CREATE INDEX IF NOT EXISTS idx_links_active ON links(created_at DESC) 
-  WHERE expiration IS NULL OR expiration > EXTRACT(EPOCH FROM NOW()) * 1000;
+CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL;
 
--- ============================================================================
--- PERFORMANCE OPTIMIZATION INDEXES 
--- ============================================================================
--- These indexes significantly improve query performance and reduce CPU usage
-
--- Critical: Case-insensitive slug lookups (10-100x faster redirects)
-CREATE INDEX IF NOT EXISTS idx_links_slug_lower ON links(LOWER(slug));
-
--- Analytics query optimization (5-50x faster)
+-- Analytics query optimization
 CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC);
 

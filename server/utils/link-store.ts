@@ -44,16 +44,9 @@ export async function getLink(event: H3Event, slug: string) {
   // Cache miss - query database
   const db = await useDrizzle(event)
 
-  let result
-  if (runtimeConfig.caseSensitive) {
-    result = await db.query.links.findFirst({
-      where: eq(links.slug, normalized),
-    })
-  } else {
-    result = await db.query.links.findFirst({
-      where: sql`lower(${links.slug}) = ${normalized}`,
-    })
-  }
+  const result = await db.query.links.findFirst({
+    where: eq(links.slug, normalized),
+  })
 
   // Cache the result (even if null to prevent repeated lookups)
   cache.set(cacheKey, result || null, 60) // 60 second TTL
@@ -135,7 +128,7 @@ export async function updateLink(event: H3Event, input: UpdateLinkInput) {
       slug: normalizedSlug,
       updated_at: new Date(),
     })
-    .where(runtimeConfig.caseSensitive ? eq(links.slug, normalizedSlug) : sql`lower(${links.slug}) = ${normalizedSlug}`)
+    .where(eq(links.slug, normalizedSlug))
     .returning()
 
   // Invalidate cache for this link
@@ -214,7 +207,7 @@ export async function deleteLink(event: H3Event, slug: string) {
 
   const [deleted] = await db
     .delete(links)
-    .where(runtimeConfig.caseSensitive ? eq(links.slug, normalized) : sql`lower(${links.slug}) = ${normalized}`)
+    .where(eq(links.slug, normalized))
     .returning()
 
   // Invalidate cache

@@ -80,10 +80,9 @@ try {
   }
   
   console.log('\n📈 Performance improvements:')
-  console.log('   • Link lookups: 10-100x faster')
-  console.log('   • Analytics queries: 5-50x faster')
-  console.log('   • Dashboard loading: 2-5x faster')
-  console.log('   • Database CPU usage: 60-80% reduction')
+  console.log('   • Link lookups: faster slug index')
+  console.log('   • Analytics queries: composite date indexes')
+  console.log('   • Dashboard loading: optimized list queries')
 
 } catch (error) {
   console.error('❌ Error:', error.message)
