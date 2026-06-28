@@ -124,7 +124,14 @@ async function upgradeSchema() {
       throw new Error(res.error)
     }
   } catch (error: any) {
-    errorMessage.value = error?.message || error?.data?.statusMessage || 'Unable to run database migrations.'
+    const payload = error?.data
+    errorMessage.value =
+      payload?.error
+      || payload?.message
+      || payload?.statusMessage
+      || error?.message
+      || error?.statusMessage
+      || 'Unable to run database migrations.'
     toasts.error('Upgrade failed', errorMessage.value)
   } finally {
     schemaUpgrading.value = false

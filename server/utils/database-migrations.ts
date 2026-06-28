@@ -100,14 +100,35 @@ async function createIndexSafe(db: DrizzleDb, name: string, statement: string, w
   }
 }
 
-async function executeSafe(db: DrizzleDb, statement: string, warnings: string[], label: string) {
+async function tableExists(db: DrizzleDb, tableName: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = ${tableName}
+    ) AS exists
+  `)
+  return Boolean(result.rows[0]?.exists)
+}
+
+async function executeStatement(
+  db: DrizzleDb,
+  statement: string,
+  warnings: string[],
+  label: string,
+  options: { critical?: boolean } = {},
+) {
   try {
     await db.execute(sql.raw(statement))
   } catch (err: any) {
     if (err.code === '42710' || err.message?.includes('already exists')) {
       return
     }
-    warnings.push(`${label}: ${err.message || 'Unknown error'}`)
+
+    const message = `${label}: ${err.message || 'Unknown error'}`
+    if (options.critical) {
+      throw new Error(message)
+    }
+    warnings.push(message)
   }
 }
 
@@ -211,14 +232,49 @@ async function ensureMigrationTracking(db: DrizzleDb) {
 
 async function recordMigration(db: DrizzleDb, id: string) {
   await ensureMigrationTracking(db)
-  await db.execute(sql`
+  const escaped = id.replace(/'/g, "''")
+  await db.execute(sql.raw(`
     INSERT INTO schema_migrations (id)
-    VALUES (${id})
+    VALUES ('${escaped}')
     ON CONFLICT (id) DO NOTHING
-  `)
+  `))
 }
 
-async function runBaseSchema(db: DrizzleDb) {
+async function createUpdatedAtTrigger(db: DrizzleDb, warnings: string[]) {
+  await db.execute(sql`
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = NOW();
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql
+  `)
+
+  for (const statement of [
+    `CREATE TRIGGER update_links_updated_at
+      BEFORE UPDATE ON links
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`,
+    `CREATE TRIGGER update_links_updated_at
+      BEFORE UPDATE ON links
+      FOR EACH ROW
+      EXECUTE PROCEDURE update_updated_at_column()`,
+  ]) {
+    try {
+      await db.execute(sql.raw(statement))
+      return
+    } catch (err: any) {
+      if (err.code === '42710' || err.message?.includes('already exists')) {
+        return
+      }
+    }
+  }
+
+  warnings.push('update_links_updated_at trigger: could not be created')
+}
+
+async function runBaseSchema(db: DrizzleDb, warnings: string[]) {
   await db.transaction(async (tx) => {
     await tx.execute(sql`
       CREATE TABLE IF NOT EXISTS tags (
@@ -414,177 +470,225 @@ async function runBaseSchema(db: DrizzleDb) {
     `)
   })
 
-  await db.execute(sql`
-    CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      NEW.updated_at = NOW();
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql
-  `)
-
-  await executeSafe(
-    db,
-    `CREATE TRIGGER update_links_updated_at
-      BEFORE UPDATE ON links
-      FOR EACH ROW
-      EXECUTE FUNCTION update_updated_at_column()`,
-    [],
-    'update_links_updated_at trigger',
-  )
+  await createUpdatedAtTrigger(db, warnings)
 }
 
 async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
-  await db.transaction(async (tx) => {
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS qr_scans (
+  if (await tableExists(db, 'links')) {
+    await executeStatement(
+      db,
+      `CREATE TABLE IF NOT EXISTS qr_scans (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
         link_id varchar(64) REFERENCES links(id) ON DELETE cascade,
         slug varchar(128),
         created_at timestamp with time zone DEFAULT now()
-      )
-    `)
+      )`,
+      warnings,
+      'qr_scans table',
+      { critical: true },
+    )
+  }
 
-    await tx.execute(sql`
-      ALTER TABLE site_settings
-      ADD COLUMN IF NOT EXISTS redirect_timeout bigint DEFAULT 3
-    `)
+  if (await tableExists(db, 'site_settings')) {
+    await executeStatement(
+      db,
+      'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS redirect_timeout bigint DEFAULT 3',
+      warnings,
+      'site_settings.redirect_timeout',
+    )
+    await executeStatement(
+      db,
+      'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS trai_sms_enabled boolean DEFAULT false',
+      warnings,
+      'site_settings.trai_sms_enabled',
+    )
+  } else {
+    warnings.push('site_settings table: missing — skipped column updates')
+  }
 
-    await tx.execute(sql`
-      ALTER TABLE access_logs
-      ADD COLUMN IF NOT EXISTS utm_source varchar(128),
-      ADD COLUMN IF NOT EXISTS utm_medium varchar(128),
-      ADD COLUMN IF NOT EXISTS utm_campaign varchar(128),
-      ADD COLUMN IF NOT EXISTS utm_term varchar(128),
-      ADD COLUMN IF NOT EXISTS utm_content varchar(128)
-    `)
+  if (await tableExists(db, 'access_logs')) {
+    await executeStatement(
+      db,
+      `ALTER TABLE access_logs
+        ADD COLUMN IF NOT EXISTS utm_source varchar(128),
+        ADD COLUMN IF NOT EXISTS utm_medium varchar(128),
+        ADD COLUMN IF NOT EXISTS utm_campaign varchar(128),
+        ADD COLUMN IF NOT EXISTS utm_term varchar(128),
+        ADD COLUMN IF NOT EXISTS utm_content varchar(128)`,
+      warnings,
+      'access_logs UTM columns',
+    )
+  } else {
+    warnings.push('access_logs table: missing — skipped UTM columns')
+  }
 
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        username varchar(64) NOT NULL UNIQUE,
-        display_name varchar(120),
-        password_hash text NOT NULL,
-        permissions text[] NOT NULL DEFAULT '{}',
-        is_active boolean DEFAULT true,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        actor_id varchar(64) NOT NULL,
-        actor_username varchar(128) NOT NULL,
-        action varchar(32) NOT NULL,
-        entity_type varchar(32) NOT NULL,
-        entity_id varchar(128),
-        entity_label varchar(256),
-        details jsonb,
-        ip inet,
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        user_id uuid REFERENCES users(id) ON DELETE CASCADE,
-        name varchar(128) NOT NULL,
-        key_prefix varchar(16) NOT NULL,
-        key_hash text NOT NULL,
-        key_encrypted text,
-        permissions text[] NOT NULL DEFAULT '{}',
-        is_active boolean DEFAULT true,
-        last_used_at timestamp with time zone,
-        expires_at timestamp with time zone,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_encrypted text
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS webhooks (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        user_id uuid REFERENCES users(id) ON DELETE CASCADE,
-        name varchar(128) NOT NULL,
-        url text NOT NULL,
-        events text[] NOT NULL DEFAULT '{}',
-        secret text NOT NULL,
-        is_active boolean DEFAULT true,
-        failure_count bigint DEFAULT 0,
-        last_triggered_at timestamp with time zone,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS webhook_deliveries (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        webhook_id uuid REFERENCES webhooks(id) ON DELETE CASCADE,
-        event_type varchar(64) NOT NULL,
-        payload jsonb NOT NULL,
-        response_status bigint,
-        response_body text,
-        error text,
-        delivered_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS api_rate_limits (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        api_key_id uuid REFERENCES api_keys(id) ON DELETE CASCADE,
-        endpoint varchar(256) NOT NULL,
-        request_count bigint DEFAULT 0,
-        window_start timestamp with time zone DEFAULT now(),
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS sender_ids (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        name varchar(6) NOT NULL,
-        description text,
-        is_active boolean DEFAULT true,
-        is_default boolean DEFAULT false,
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      ALTER TABLE sender_ids ADD COLUMN IF NOT EXISTS is_default boolean DEFAULT false
-    `)
-
-    await tx.execute(sql`
-      ALTER TABLE links ADD COLUMN IF NOT EXISTS sender_id uuid
-    `)
-
-    await tx.execute(sql`
-      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS trai_sms_enabled boolean DEFAULT false
-    `)
-
-    await tx.execute(sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids USING btree (name)
-    `)
-  })
-
-  await executeSafe(
+  await executeStatement(
     db,
-    `ALTER TABLE links ADD CONSTRAINT links_sender_id_sender_ids_id_fk
-      FOREIGN KEY (sender_id) REFERENCES public.sender_ids(id)
-      ON DELETE SET NULL ON UPDATE NO ACTION`,
+    `CREATE TABLE IF NOT EXISTS users (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      username varchar(64) NOT NULL UNIQUE,
+      display_name varchar(120),
+      password_hash text NOT NULL,
+      permissions text[] NOT NULL DEFAULT '{}',
+      is_active boolean DEFAULT true,
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now()
+    )`,
     warnings,
-    'links_sender_id_sender_ids_id_fk',
+    'users table',
+    { critical: true },
   )
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS audit_logs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      actor_id varchar(64) NOT NULL,
+      actor_username varchar(128) NOT NULL,
+      action varchar(32) NOT NULL,
+      entity_type varchar(32) NOT NULL,
+      entity_id varchar(128),
+      entity_label varchar(256),
+      details jsonb,
+      ip inet,
+      created_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'audit_logs table',
+    { critical: true },
+  )
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS api_keys (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+      name varchar(128) NOT NULL,
+      key_prefix varchar(16) NOT NULL,
+      key_hash text NOT NULL,
+      key_encrypted text,
+      permissions text[] NOT NULL DEFAULT '{}',
+      is_active boolean DEFAULT true,
+      last_used_at timestamp with time zone,
+      expires_at timestamp with time zone,
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'api_keys table',
+    { critical: true },
+  )
+
+  if (await tableExists(db, 'api_keys')) {
+    await executeStatement(
+      db,
+      'ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_encrypted text',
+      warnings,
+      'api_keys.key_encrypted',
+    )
+  }
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS webhooks (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+      name varchar(128) NOT NULL,
+      url text NOT NULL,
+      events text[] NOT NULL DEFAULT '{}',
+      secret text NOT NULL,
+      is_active boolean DEFAULT true,
+      failure_count bigint DEFAULT 0,
+      last_triggered_at timestamp with time zone,
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'webhooks table',
+    { critical: true },
+  )
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      webhook_id uuid REFERENCES webhooks(id) ON DELETE CASCADE,
+      event_type varchar(64) NOT NULL,
+      payload jsonb NOT NULL,
+      response_status bigint,
+      response_body text,
+      error text,
+      delivered_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'webhook_deliveries table',
+    { critical: true },
+  )
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS api_rate_limits (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      api_key_id uuid REFERENCES api_keys(id) ON DELETE CASCADE,
+      endpoint varchar(256) NOT NULL,
+      request_count bigint DEFAULT 0,
+      window_start timestamp with time zone DEFAULT now(),
+      created_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'api_rate_limits table',
+    { critical: true },
+  )
+
+  await executeStatement(
+    db,
+    `CREATE TABLE IF NOT EXISTS sender_ids (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+      name varchar(6) NOT NULL,
+      description text,
+      is_active boolean DEFAULT true,
+      is_default boolean DEFAULT false,
+      created_at timestamp with time zone DEFAULT now()
+    )`,
+    warnings,
+    'sender_ids table',
+    { critical: true },
+  )
+
+  if (await tableExists(db, 'sender_ids')) {
+    await executeStatement(
+      db,
+      'ALTER TABLE sender_ids ADD COLUMN IF NOT EXISTS is_default boolean DEFAULT false',
+      warnings,
+      'sender_ids.is_default',
+    )
+    await executeStatement(
+      db,
+      'CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids USING btree (name)',
+      warnings,
+      'sender_ids_name_unique index',
+    )
+  }
+
+  if (await tableExists(db, 'links')) {
+    await executeStatement(
+      db,
+      'ALTER TABLE links ADD COLUMN IF NOT EXISTS sender_id uuid',
+      warnings,
+      'links.sender_id',
+    )
+  }
+
+  if (await tableExists(db, 'links') && await tableExists(db, 'sender_ids')) {
+    await executeStatement(
+      db,
+      `ALTER TABLE links ADD CONSTRAINT links_sender_id_sender_ids_id_fk
+        FOREIGN KEY (sender_id) REFERENCES public.sender_ids(id)
+        ON DELETE SET NULL ON UPDATE NO ACTION`,
+      warnings,
+      'links_sender_id_sender_ids_id_fk',
+    )
+  }
 }
 
 async function runIndexes(db: DrizzleDb, warnings: string[]) {
@@ -592,22 +696,47 @@ async function runIndexes(db: DrizzleDb, warnings: string[]) {
     await createIndexSafe(db, name, statement, warnings)
   }
 
-  await db.execute(sql`DROP INDEX IF EXISTS idx_links_slug_lower`)
+  await executeStatement(db, 'DROP INDEX IF EXISTS idx_links_slug_lower', warnings, 'drop idx_links_slug_lower')
 
   for (const [name, statement] of PERFORMANCE_INDEXES) {
     await createIndexSafe(db, name, statement, warnings)
   }
 }
 
-async function normalizeLinkSlugs(db: DrizzleDb) {
-  await db.execute(sql`
-    UPDATE links SET slug = LOWER(TRIM(slug)) WHERE slug <> LOWER(TRIM(slug))
-  `)
+async function normalizeLinkSlugs(db: DrizzleDb, warnings: string[]) {
+  if (!(await tableExists(db, 'links'))) {
+    return
+  }
+
+  try {
+    const conflicts = await db.execute(sql`
+      SELECT LOWER(TRIM(slug)) AS normalized, COUNT(*)::int AS count
+      FROM links
+      GROUP BY LOWER(TRIM(slug))
+      HAVING COUNT(*) > 1
+    `)
+
+    if (conflicts.rows.length > 0) {
+      warnings.push(
+        `Slug normalization skipped: ${conflicts.rows.length} slug group(s) differ only by case. Resolve duplicates manually.`,
+      )
+      return
+    }
+
+    await db.execute(sql`
+      UPDATE links SET slug = LOWER(TRIM(slug)) WHERE slug <> LOWER(TRIM(slug))
+    `)
+  } catch (err: any) {
+    warnings.push(`Slug normalization: ${err.message || 'Unknown error'}`)
+  }
 }
 
-async function analyzeTables(db: DrizzleDb) {
+async function analyzeTables(db: DrizzleDb, warnings: string[]) {
   for (const table of ['links', 'access_logs', 'qr_scans', 'tags', 'api_keys', 'api_rate_limits'] as const) {
-    await db.execute(sql.raw(`ANALYZE ${table}`))
+    if (!(await tableExists(db, table))) {
+      continue
+    }
+    await executeStatement(db, `ANALYZE ${table}`, warnings, `ANALYZE ${table}`)
   }
 }
 
@@ -632,7 +761,7 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
 
   const empty = await isDatabaseEmpty(db)
   if (empty) {
-    await runBaseSchema(db)
+    await runBaseSchema(db, warnings)
     appliedBaseSchema = true
     await recordMigration(db, 'base_schema')
   }
@@ -640,11 +769,11 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
   await runIncrementalSchema(db, warnings)
 
   if (!caseSensitive) {
-    await normalizeLinkSlugs(db)
+    await normalizeLinkSlugs(db, warnings)
   }
 
   await runIndexes(db, warnings)
-  await analyzeTables(db)
+  await analyzeTables(db, warnings)
   await recordMigration(db, `v${MIGRATION_VERSION}`)
 
   const message = appliedBaseSchema

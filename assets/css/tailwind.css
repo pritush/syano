@@ -1,3 +1,4 @@
+/* eslint-disable-next-line CssSyntaxError */
 @import "tailwindcss";
 @import "@nuxt/ui";
 @import "./dashboard-link-form.css";
