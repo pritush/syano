@@ -6,10 +6,12 @@ This directory contains SQL migration files for the SyanoLink application.
 
 ### Option 1: Use the Dashboard (Recommended)
 
-1. Go to **Dashboard → Data Ops**
-2. Click **"Run Database Upgrade"**
+1. Go to **Dashboard → Data Operations**
+2. Click **Initialize Database** (empty DB) or **Apply Database Update**
 3. Wait for the success message
-4. Done! ✅
+4. Done!
+
+See **[docs/DATABASE_UPGRADE.md](../docs/DATABASE_UPGRADE.md)** for full details on the upgrade system, API, and troubleshooting.
 
 ### Option 2: Run SQL Directly
 

@@ -1,161 +1,38 @@
 import { defineEventHandler } from 'h3'
-import { sql } from 'drizzle-orm'
-import { useDrizzle, getConnectionHealth } from '~/server/utils/db'
+import { useRuntimeConfig } from '#imports'
+import { useDrizzle } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
+import { checkSchema } from '~/server/utils/database-migrations'
 
 export default defineEventHandler(async (event) => {
   await requirePermission(event, PERMISSIONS.DATA_MANAGE)
-  
-  let db;
+
+  let db
   try {
     db = await useDrizzle(event)
   } catch (err: any) {
-    return { 
-      status: 'error', 
-      upToDate: false, 
-      missing: [], 
-      error: err.message || 'Unable to connect to database' 
+    return {
+      status: 'error',
+      upToDate: false,
+      missing: [],
+      migrationVersion: 0,
+      normalizeSlugsOnUpgrade: false,
+      error: err.message || 'Unable to connect to database',
     }
   }
 
   try {
-    // Check if the database has any tables at all
-    const anyTablesCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public'
-      );
-    `)
-    const hasAnyTables = anyTablesCheck.rows[0]?.exists
-
-    if (!hasAnyTables) {
-      return {
-        status: 'empty',
-        upToDate: false,
-        missing: ['All tables (Database is empty)'],
-        error: null
-      }
-    }
-
-    const tableCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'qr_scans'
-      );
-    `)
-    const hasQrScans = tableCheck.rows[0]?.exists
-
-    const colCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'site_settings' AND column_name = 'redirect_timeout'
-      );
-    `)
-    const hasTimeout = colCheck.rows[0]?.exists
-
-    const utmCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'access_logs' AND column_name = 'utm_source'
-      );
-    `)
-    const hasUtm = utmCheck.rows[0]?.exists
-
-    const usersCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'users'
-      );
-    `)
-    const hasUsers = usersCheck.rows[0]?.exists
-
-    const auditLogsCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'audit_logs'
-      );
-    `)
-    const hasAuditLogs = auditLogsCheck.rows[0]?.exists
-
-    const apiKeysCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'api_keys'
-      );
-    `)
-    const hasApiKeys = apiKeysCheck.rows[0]?.exists
-
-    const rateLimitsCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'api_rate_limits'
-      );
-    `)
-    const hasRateLimits = rateLimitsCheck.rows[0]?.exists
-
-    const keyEncryptedCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'api_keys' AND column_name = 'key_encrypted'
-      );
-    `)
-    const hasKeyEncrypted = keyEncryptedCheck.rows[0]?.exists
-
-    const perfIndexCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM pg_indexes 
-        WHERE tablename = 'links' AND indexname = 'idx_links_slug'
-      );
-    `)
-    const hasPerfIndexes = perfIndexCheck.rows[0]?.exists
-
-    const senderIdsCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'sender_ids'
-      );
-    `)
-    const hasSenderIds = senderIdsCheck.rows[0]?.exists
-
-    const traiEnabledCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'site_settings' AND column_name = 'trai_sms_enabled'
-      );
-    `)
-    const hasTraiEnabled = traiEnabledCheck.rows[0]?.exists
-
-    const isDefaultCheck = await db.execute(sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'sender_ids' AND column_name = 'is_default'
-      );
-    `)
-    const hasIsDefault = isDefaultCheck.rows[0]?.exists
-
-    const missing = []
-    if (!hasQrScans) missing.push('New table for tracking QR code scans')
-    if (!hasTimeout) missing.push('New redirect delay configuration field')
-    if (!hasUtm) missing.push('Analytics UTM parameters tracking')
-    if (!hasUsers) missing.push('Users table for dashboard user management')
-    if (!hasAuditLogs) missing.push('Audit logs table for compliance and security tracking')
-    if (!hasApiKeys) missing.push('API keys table for REST API authentication')
-    if (!hasRateLimits) missing.push('API rate limits table for API throttling')
-    if (!hasKeyEncrypted) missing.push('API key encryption column for reveal feature')
-    if (!hasPerfIndexes) missing.push('Query performance indexes')
-    if (!hasSenderIds) missing.push('Sender IDs table for TRAI SMS compliance')
-    if (!hasTraiEnabled) missing.push('TRAI SMS compliance setting field')
-    if (!hasIsDefault) missing.push('Default Sender ID feature flag')
-
-    const upToDate = hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs && hasApiKeys && hasRateLimits && hasKeyEncrypted && hasPerfIndexes && hasSenderIds && hasTraiEnabled && hasIsDefault
-
-    return {
-      status: 'connected',
-      upToDate,
-      missing
-    }
+    const runtimeConfig = useRuntimeConfig(event)
+    return await checkSchema(db, runtimeConfig.caseSensitive)
   } catch (err: any) {
-    return { status: 'error', upToDate: false, missing: [], error: err.message } // Fail safe so it doesn't brick UX
+    return {
+      status: 'error',
+      upToDate: false,
+      missing: [],
+      migrationVersion: 0,
+      normalizeSlugsOnUpgrade: false,
+      error: err.message,
+    }
   }
 })

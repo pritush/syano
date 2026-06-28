@@ -63,13 +63,36 @@ const errorMessage = ref('')
 // Schema Checking
 const schemaChecking = ref(true)
 const schemaUpgrading = ref(false)
-const schemaStatus = ref<{ status?: string; upToDate: boolean; missing: string[]; error?: string } | null>(null)
+const schemaStatus = ref<{
+  status?: string
+  upToDate: boolean
+  missing: string[]
+  error?: string
+  migrationVersion?: number
+  normalizeSlugsOnUpgrade?: boolean
+} | null>(null)
 
-async function checkSchema() {
+async function checkSchema(force = false) {
+  if (force) {
+    schemaChecking.value = true
+  }
+
   try {
-    schemaStatus.value = await api.request<{ status?: string; upToDate: boolean; missing: string[]; error?: string }>('/api/database/schema-check')
-  } catch (e: any) {
-    // Silent fail
+    schemaStatus.value = await api.request<{
+      status?: string
+      upToDate: boolean
+      missing: string[]
+      error?: string
+      migrationVersion?: number
+      normalizeSlugsOnUpgrade?: boolean
+    }>('/api/database/schema-check')
+  } catch (error: any) {
+    schemaStatus.value = {
+      status: 'error',
+      upToDate: false,
+      missing: [],
+      error: error?.message || error?.data?.statusMessage || 'Unable to check database schema.',
+    }
   } finally {
     schemaChecking.value = false
   }
@@ -81,7 +104,13 @@ async function upgradeSchema() {
   errorMessage.value = ''
   
   try {
-    const res = await api.request<{ success: boolean; message: string; error?: string; warnings?: string[] }>('/api/database/upgrade', { method: 'POST' })
+    const res = await api.request<{
+      success: boolean
+      message: string
+      error?: string
+      warnings?: string[]
+      appliedBaseSchema?: boolean
+    }>('/api/database/upgrade', { method: 'POST' })
     if (res.success) {
       statusMessage.value = res.message || 'Database schema successfully updated.'
       if (res.warnings?.length) {
@@ -269,7 +298,7 @@ function downloadBackup() {
     <transition name="fade">
       <div v-if="statusMessage" class="flex items-center gap-3 rounded-[20px] bg-brand-50 p-4 text-brand-700 ring-1 ring-inset ring-brand-600/20 dark:bg-brand-500/10 dark:text-brand-400 dark:ring-brand-500/20">
         <UIcon name="lucide:check-circle-2" class="h-5 w-5 shrink-0" />
-        <p class="font-medium">{{ statusMessage }}</p>
+        <p class="font-medium whitespace-pre-line">{{ statusMessage }}</p>
       </div>
       <div v-else-if="errorMessage" class="flex items-center gap-3 rounded-[20px] bg-red-50 p-4 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20">
         <UIcon name="lucide:alert-circle" class="h-5 w-5 shrink-0" />
@@ -278,7 +307,29 @@ function downloadBackup() {
     </transition>
 
     <!-- Schema Upgrade Assistant -->
-    <div v-if="!schemaChecking && schemaStatus?.status === 'error'" class="rounded-[24px] bg-red-50 p-6 ring-1 ring-inset ring-red-200 dark:bg-red-900/10 dark:ring-red-800/30">
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-4">
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          Check schema status and apply incremental updates. Back up your database before upgrading.
+        </p>
+        <UButton
+          variant="outline"
+          color="neutral"
+          size="sm"
+          icon="lucide:refresh-cw"
+          :loading="schemaChecking"
+          @click="checkSchema(true)"
+        >
+          Recheck
+        </UButton>
+      </div>
+
+    <div v-if="schemaChecking" class="flex items-center gap-2 rounded-[20px] bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:ring-slate-800">
+      <UIcon name="lucide:loader-circle" class="h-4 w-4 animate-spin" />
+      Checking database schema…
+    </div>
+
+    <div v-else-if="schemaStatus?.status === 'error'" class="rounded-[24px] bg-red-50 p-6 ring-1 ring-inset ring-red-200 dark:bg-red-900/10 dark:ring-red-800/30">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-2">
@@ -292,7 +343,7 @@ function downloadBackup() {
       </div>
     </div>
 
-    <div v-else-if="!schemaChecking && schemaStatus?.status === 'empty'" class="rounded-[24px] bg-brand-50 p-6 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/10 dark:ring-brand-800/30">
+    <div v-else-if="schemaStatus?.status === 'empty'" class="rounded-[24px] bg-brand-50 p-6 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/10 dark:ring-brand-800/30">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-2">
@@ -300,16 +351,16 @@ function downloadBackup() {
             <h3 class="text-lg font-semibold text-brand-900 dark:text-brand-100">Database is Empty</h3>
           </div>
           <p class="text-sm text-brand-700 dark:text-brand-300">
-            We are able to connect to the database but unable to find any tables. Proceed to populate the database with the required schema.
+            The database is connected but has no tables. Click below to create the full Syano schema.
           </p>
         </div>
         <UButton :loading="schemaUpgrading" @click="upgradeSchema" color="primary" size="lg" icon="lucide:database-zap" class="shrink-0">
-          Populate Database
+          Initialize Database
         </UButton>
       </div>
     </div>
 
-    <div v-else-if="!schemaChecking && schemaStatus?.upToDate === false" class="rounded-[24px] bg-amber-50 p-6 ring-1 ring-inset ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-800/30">
+    <div v-else-if="schemaStatus?.upToDate === false" class="rounded-[24px] bg-amber-50 p-6 ring-1 ring-inset ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-800/30">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-2">
@@ -317,7 +368,13 @@ function downloadBackup() {
             <h3 class="text-lg font-semibold text-amber-900 dark:text-amber-100">Database Update Available</h3>
           </div>
           <p class="text-sm text-amber-700 dark:text-amber-300">
-            We detected that your PostgreSQL schema is missing some of the latest update structures.
+            Your schema is missing items required by this version of Syano.
+          </p>
+          <p
+            v-if="schemaStatus.normalizeSlugsOnUpgrade"
+            class="mt-2 text-sm text-amber-700 dark:text-amber-300"
+          >
+            This update will normalize existing link slugs to lowercase for case-insensitive redirects.
           </p>
           <ul class="mt-3 list-inside list-disc text-sm text-amber-700 dark:text-amber-300">
             <li v-for="item in schemaStatus.missing" :key="item">{{ item }}</li>
@@ -329,9 +386,12 @@ function downloadBackup() {
       </div>
     </div>
     
-    <div v-else-if="!schemaChecking && schemaStatus?.upToDate === true" class="flex items-center gap-2 rounded-[20px] bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
-      <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
-      Database schema is fully up to date. No updates required.
+    <div v-else-if="schemaStatus?.upToDate === true" class="flex items-center justify-between gap-4 rounded-[20px] bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
+      <div class="flex items-center gap-2">
+        <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
+        Database schema is up to date (v{{ schemaStatus.migrationVersion }}).
+      </div>
+    </div>
     </div>
 
     <!-- Full Database Backup/Restore -->
