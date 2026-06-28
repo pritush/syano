@@ -83,15 +83,7 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "qr_scans" ADD CONSTRAINT "qr_scans_link_id_links_id_fk" FOREIGN KEY ("link_id") REFERENCES "public"."links"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
+ALTER TABLE "qr_scans" ADD CONSTRAINT "qr_scans_link_id_links_id_fk" FOREIGN KEY ("link_id") REFERENCES "public"."links"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "sender_ids_name_unique" ON "sender_ids" USING btree ("name");--> statement-breakpoint
-DO $$ BEGIN
- ALTER TABLE "links" ADD CONSTRAINT "links_sender_id_sender_ids_id_fk" FOREIGN KEY ("sender_id") REFERENCES "public"."sender_ids"("id") ON DELETE set null ON UPDATE no action;
-EXCEPTION
- WHEN duplicate_object THEN null;
-END $$;
+ALTER TABLE "links" ADD CONSTRAINT "links_sender_id_sender_ids_id_fk" FOREIGN KEY ("sender_id") REFERENCES "public"."sender_ids"("id") ON DELETE set null ON UPDATE no action;

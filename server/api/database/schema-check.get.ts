@@ -1,14 +1,43 @@
 import { defineEventHandler } from 'h3'
 import { sql } from 'drizzle-orm'
-import { useDrizzle } from '~/server/utils/db'
+import { useDrizzle, getConnectionHealth } from '~/server/utils/db'
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
 
 export default defineEventHandler(async (event) => {
   await requirePermission(event, PERMISSIONS.DATA_MANAGE)
-  const db = await useDrizzle(event)
+  
+  let db;
+  try {
+    db = await useDrizzle(event)
+  } catch (err: any) {
+    return { 
+      status: 'error', 
+      upToDate: false, 
+      missing: [], 
+      error: err.message || 'Unable to connect to database' 
+    }
+  }
 
   try {
+    // Check if the database has any tables at all
+    const anyTablesCheck = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      );
+    `)
+    const hasAnyTables = anyTablesCheck.rows[0]?.exists
+
+    if (!hasAnyTables) {
+      return {
+        status: 'empty',
+        upToDate: false,
+        missing: ['All tables (Database is empty)'],
+        error: null
+      }
+    }
+
     const tableCheck = await db.execute(sql`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -120,11 +149,14 @@ export default defineEventHandler(async (event) => {
     if (!hasTraiEnabled) missing.push('TRAI SMS compliance setting field')
     if (!hasIsDefault) missing.push('Default Sender ID feature flag')
 
+    const upToDate = hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs && hasApiKeys && hasRateLimits && hasKeyEncrypted && hasPerfIndexes && hasSenderIds && hasTraiEnabled && hasIsDefault
+
     return {
-      upToDate: hasQrScans && hasTimeout && hasUtm && hasUsers && hasAuditLogs && hasApiKeys && hasRateLimits && hasKeyEncrypted && hasPerfIndexes && hasSenderIds && hasTraiEnabled && hasIsDefault,
+      status: 'connected',
+      upToDate,
       missing
     }
   } catch (err: any) {
-    return { upToDate: true, missing: [], error: err.message } // Fail safe so it doesn't brick UX
+    return { status: 'error', upToDate: false, missing: [], error: err.message } // Fail safe so it doesn't brick UX
   }
 })

@@ -63,11 +63,11 @@ const errorMessage = ref('')
 // Schema Checking
 const schemaChecking = ref(true)
 const schemaUpgrading = ref(false)
-const schemaStatus = ref<{ upToDate: boolean; missing: string[]; error?: string } | null>(null)
+const schemaStatus = ref<{ status?: string; upToDate: boolean; missing: string[]; error?: string } | null>(null)
 
 async function checkSchema() {
   try {
-    schemaStatus.value = await api.request<{ upToDate: boolean; missing: string[]; error?: string }>('/api/database/schema-check')
+    schemaStatus.value = await api.request<{ status?: string; upToDate: boolean; missing: string[]; error?: string }>('/api/database/schema-check')
   } catch (e: any) {
     // Silent fail
   } finally {
@@ -83,7 +83,7 @@ async function upgradeSchema() {
   try {
     const res = await api.request<{ success: boolean; message: string; error?: string }>('/api/database/upgrade', { method: 'POST' })
     if (res.success) {
-      statusMessage.value = 'Database schema successfully upgraded to match latest version.'
+      statusMessage.value = res.message || 'Database schema successfully updated.'
       toasts.success('Upgrade completed', res.message)
       await checkSchema()
     } else {
@@ -273,17 +273,48 @@ function downloadBackup() {
     </transition>
 
     <!-- Schema Upgrade Assistant -->
-    <div v-if="!schemaChecking && schemaStatus?.upToDate === false" class="rounded-[24px] bg-brand-50 p-6 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/10 dark:ring-brand-800/30">
+    <div v-if="!schemaChecking && schemaStatus?.status === 'error'" class="rounded-[24px] bg-red-50 p-6 ring-1 ring-inset ring-red-200 dark:bg-red-900/10 dark:ring-red-800/30">
       <div class="flex items-start justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-2">
-            <UIcon name="lucide:sparkles" class="h-5 w-5 text-brand-600 dark:text-brand-400" />
-            <h3 class="text-lg font-semibold text-brand-900 dark:text-brand-100">Database Update Available</h3>
+            <UIcon name="lucide:alert-circle" class="h-5 w-5 text-red-600 dark:text-red-400" />
+            <h3 class="text-lg font-semibold text-red-900 dark:text-red-100">Unable to Connect to Database</h3>
+          </div>
+          <p class="text-sm text-red-700 dark:text-red-300">
+            {{ schemaStatus.error || 'Please check your connection settings.' }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="!schemaChecking && schemaStatus?.status === 'empty'" class="rounded-[24px] bg-brand-50 p-6 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/10 dark:ring-brand-800/30">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="lucide:database" class="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h3 class="text-lg font-semibold text-brand-900 dark:text-brand-100">Database is Empty</h3>
           </div>
           <p class="text-sm text-brand-700 dark:text-brand-300">
+            We are able to connect to the database but unable to find any tables. Proceed to populate the database with the required schema.
+          </p>
+        </div>
+        <UButton :loading="schemaUpgrading" @click="upgradeSchema" color="primary" size="lg" icon="lucide:database-zap" class="shrink-0">
+          Populate Database
+        </UButton>
+      </div>
+    </div>
+
+    <div v-else-if="!schemaChecking && schemaStatus?.upToDate === false" class="rounded-[24px] bg-amber-50 p-6 ring-1 ring-inset ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-800/30">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="lucide:sparkles" class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <h3 class="text-lg font-semibold text-amber-900 dark:text-amber-100">Database Update Available</h3>
+          </div>
+          <p class="text-sm text-amber-700 dark:text-amber-300">
             We detected that your PostgreSQL schema is missing some of the latest update structures.
           </p>
-          <ul class="mt-3 list-inside list-disc text-sm text-brand-700 dark:text-brand-300">
+          <ul class="mt-3 list-inside list-disc text-sm text-amber-700 dark:text-amber-300">
             <li v-for="item in schemaStatus.missing" :key="item">{{ item }}</li>
           </ul>
         </div>
@@ -292,6 +323,7 @@ function downloadBackup() {
         </UButton>
       </div>
     </div>
+    
     <div v-else-if="!schemaChecking && schemaStatus?.upToDate === true" class="flex items-center gap-2 rounded-[20px] bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
       <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
       Database schema is fully up to date. No updates required.
