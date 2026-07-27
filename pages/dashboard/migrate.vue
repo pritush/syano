@@ -67,6 +67,7 @@ const schemaStatus = ref<{
   status?: string
   upToDate: boolean
   missing: string[]
+  missingIndexes?: string[]
   error?: string
   migrationVersion?: number
   normalizeSlugsOnUpgrade?: boolean
@@ -82,6 +83,7 @@ async function checkSchema(force = false) {
       status?: string
       upToDate: boolean
       missing: string[]
+      missingIndexes?: string[]
       error?: string
       migrationVersion?: number
       normalizeSlugsOnUpgrade?: boolean
@@ -91,6 +93,7 @@ async function checkSchema(force = false) {
       status: 'error',
       upToDate: false,
       missing: [],
+      missingIndexes: [],
       error: error?.message || error?.data?.statusMessage || 'Unable to check database schema.',
     }
   } finally {
@@ -110,6 +113,7 @@ async function upgradeSchema() {
       error?: string
       warnings?: string[]
       appliedBaseSchema?: boolean
+      schemaCheck?: any
     }>('/api/database/upgrade', { method: 'POST' })
     if (res.success) {
       statusMessage.value = res.message || 'Database schema successfully updated.'
@@ -119,7 +123,11 @@ async function upgradeSchema() {
       } else {
         toasts.success('Upgrade completed', res.message)
       }
-      await checkSchema()
+      if (res.schemaCheck) {
+        schemaStatus.value = res.schemaCheck
+      } else {
+        await checkSchema()
+      }
     } else {
       throw new Error(res.error)
     }
@@ -394,9 +402,14 @@ function downloadBackup() {
     </div>
     
     <div v-else-if="schemaStatus?.upToDate === true" class="flex items-center justify-between gap-4 rounded-[20px] bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
-      <div class="flex items-center gap-2">
-        <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
-        Database schema is up to date (v{{ schemaStatus.migrationVersion }}).
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <UIcon name="lucide:check-circle-2" class="h-4 w-4" />
+          Database schema is up to date (v{{ schemaStatus.migrationVersion }}).
+        </div>
+        <div v-if="schemaStatus.missingIndexes?.length" class="text-xs text-emerald-600/80 dark:text-emerald-400/80 pl-6">
+          Note: {{ schemaStatus.missingIndexes.length }} performance index(es) could not be created. This is non-critical and your database is fully operational.
+        </div>
       </div>
     </div>
     </div>

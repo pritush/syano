@@ -5,6 +5,7 @@ import type { useDrizzle } from '~/server/utils/db'
 export const MIGRATION_VERSION = 2
 
 type DrizzleDb = Awaited<ReturnType<typeof useDrizzle>>
+type DbExecutor = Pick<DrizzleDb, 'execute'>
 
 export interface MigrationItem {
   id: string
@@ -15,6 +16,7 @@ export interface SchemaCheckResult {
   status: 'connected' | 'empty' | 'error'
   upToDate: boolean
   missing: string[]
+  missingIndexes: string[]
   migrationVersion: number
   normalizeSlugsOnUpgrade: boolean
   error?: string
@@ -27,11 +29,21 @@ export interface UpgradeResult {
   warnings?: string[]
   appliedBaseSchema?: boolean
   migrationVersion: number
+  schemaCheck?: SchemaCheckResult
 }
 
 const globalStore = globalThis as typeof globalThis & {
   __syanoUpgradeInProgress?: boolean
 }
+
+// This lock is held for the lifetime of the upgrade transaction. Unlike the
+// in-process lock below, it also protects deployments running multiple app
+// instances against applying the same DDL concurrently.
+const DATABASE_UPGRADE_LOCK_KEY = 709_714_118_533
+
+// ---------------------------------------------------------------------------
+// Schema definitions (single source of truth)
+// ---------------------------------------------------------------------------
 
 const REQUIRED_TABLES: MigrationItem[] = [
   { id: 'links', label: 'Links table' },
@@ -57,14 +69,20 @@ const REQUIRED_COLUMNS: Array<MigrationItem & { table: string; column: string }>
   { id: 'is_default', table: 'sender_ids', column: 'is_default', label: 'Default sender ID flag' },
 ]
 
-const REQUIRED_INDEXES: MigrationItem[] = [
+/**
+ * Sentinel indexes used to verify that the full index set was applied.
+ * Missing indexes are reported separately and do NOT block upToDate.
+ */
+const SENTINEL_INDEXES: MigrationItem[] = [
   { id: 'idx_access_logs_link_date', label: 'Analytics query indexes' },
   { id: 'idx_qr_scans_link_date', label: 'QR scan analytics indexes' },
 ]
 
 const PERFORMANCE_INDEXES = [
+  ['idx_access_logs_created_at', 'CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC)'],
   ['idx_access_logs_slug_date', 'CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC)'],
   ['idx_access_logs_link_date', 'CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC)'],
+  ['idx_access_logs_country', 'CREATE INDEX IF NOT EXISTS idx_access_logs_country ON access_logs(country) WHERE country IS NOT NULL'],
   ['idx_access_logs_browser', 'CREATE INDEX IF NOT EXISTS idx_access_logs_browser ON access_logs(browser_type) WHERE browser_type IS NOT NULL'],
   ['idx_access_logs_device', 'CREATE INDEX IF NOT EXISTS idx_access_logs_device ON access_logs(device_type) WHERE device_type IS NOT NULL'],
   ['idx_access_logs_os', 'CREATE INDEX IF NOT EXISTS idx_access_logs_os ON access_logs(os) WHERE os IS NOT NULL'],
@@ -84,6 +102,7 @@ const STANDARD_INDEXES = [
   ['idx_audit_logs_entity_type', 'CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type)'],
   ['idx_audit_logs_actor', 'CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id)'],
   ['idx_api_keys_user_id', 'CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)'],
+  ['idx_api_keys_key_prefix', 'CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix ON api_keys(key_prefix)'],
   ['idx_api_keys_key_hash', 'CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash)'],
   ['idx_webhooks_user_id', 'CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks(user_id)'],
   ['idx_webhook_deliveries_webhook_id', 'CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id)'],
@@ -92,7 +111,11 @@ const STANDARD_INDEXES = [
   ['idx_api_rate_limits_window_start', 'CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window_start ON api_rate_limits(window_start)'],
 ] as const
 
-async function createIndexSafe(db: DrizzleDb, name: string, statement: string, warnings: string[]) {
+// ---------------------------------------------------------------------------
+// Low-level helpers
+// ---------------------------------------------------------------------------
+
+async function createIndexSafe(db: DbExecutor, name: string, statement: string, warnings: string[]) {
   try {
     await db.execute(sql.raw(statement))
   } catch (err: any) {
@@ -100,7 +123,7 @@ async function createIndexSafe(db: DrizzleDb, name: string, statement: string, w
   }
 }
 
-async function tableExists(db: DrizzleDb, tableName: string): Promise<boolean> {
+async function tableExists(db: DbExecutor, tableName: string): Promise<boolean> {
   const result = await db.execute(sql`
     SELECT EXISTS (
       SELECT 1 FROM information_schema.tables
@@ -111,7 +134,7 @@ async function tableExists(db: DrizzleDb, tableName: string): Promise<boolean> {
 }
 
 async function executeStatement(
-  db: DrizzleDb,
+  db: DbExecutor,
   statement: string,
   warnings: string[],
   label: string,
@@ -120,10 +143,6 @@ async function executeStatement(
   try {
     await db.execute(sql.raw(statement))
   } catch (err: any) {
-    if (err.code === '42710' || err.message?.includes('already exists')) {
-      return
-    }
-
     const message = `${label}: ${err.message || 'Unknown error'}`
     if (options.critical) {
       throw new Error(message)
@@ -131,6 +150,10 @@ async function executeStatement(
     warnings.push(message)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Schema check
+// ---------------------------------------------------------------------------
 
 export async function isDatabaseEmpty(db: DrizzleDb): Promise<boolean> {
   const result = await db.execute(sql`
@@ -142,17 +165,42 @@ export async function isDatabaseEmpty(db: DrizzleDb): Promise<boolean> {
   return Boolean(result.rows[0]?.is_empty)
 }
 
+/**
+ * A database can contain unrelated tables (for example, a provider's own
+ * bookkeeping table) and still be a fresh Syano installation. This is more
+ * useful than treating every non-empty public schema as an existing install.
+ */
+async function hasApplicationSchema(db: DbExecutor): Promise<boolean> {
+  const tableList = REQUIRED_TABLES.map((item) => `'${item.id}'`).join(', ')
+  const result = await db.execute(sql.raw(`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN (${tableList})
+    ) AS exists
+  `))
+  return Boolean(result.rows[0]?.exists)
+}
+
+/**
+ * Checks the current database schema against required tables, columns, and
+ * sentinel indexes. Tables + columns determine `upToDate`. Missing indexes
+ * are reported in `missingIndexes` separately — they do NOT block `upToDate`
+ * since restricted providers may silently prevent index creation.
+ */
 export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promise<SchemaCheckResult> {
   if (await isDatabaseEmpty(db)) {
     return {
       status: 'empty',
       upToDate: false,
       missing: ['Core database schema (empty database)'],
+      missingIndexes: [],
       migrationVersion: 0,
       normalizeSlugsOnUpgrade: !caseSensitive,
     }
   }
 
+  // Batch query 1: check tables
   const tableNames = REQUIRED_TABLES.map((item) => item.id)
   const tableList = tableNames.map((name) => `'${name}'`).join(', ')
 
@@ -166,6 +214,7 @@ export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promis
     tablesResult.rows.map((row) => String((row as { table_name: string }).table_name)),
   )
 
+  // Batch query 2: check columns
   const columnChecks = REQUIRED_COLUMNS.map(
     (item) =>
       `EXISTS (
@@ -179,7 +228,8 @@ export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promis
   const columnsResult = await db.execute(sql.raw(`SELECT ${columnChecks}`))
   const columnRow = (columnsResult.rows[0] || {}) as Record<string, boolean>
 
-  const indexNames = REQUIRED_INDEXES.map((item) => item.id)
+  // Batch query 3: check sentinel indexes
+  const indexNames = SENTINEL_INDEXES.map((item) => item.id)
   const indexList = indexNames.map((name) => `'${name}'`).join(', ')
 
   const indexesResult = await db.execute(sql.raw(`
@@ -192,6 +242,7 @@ export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promis
     indexesResult.rows.map((row) => String((row as { indexname: string }).indexname)),
   )
 
+  // Collect missing items — tables and columns are "core" (block upToDate)
   const missing: string[] = []
 
   for (const table of REQUIRED_TABLES) {
@@ -206,9 +257,11 @@ export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promis
     }
   }
 
-  for (const index of REQUIRED_INDEXES) {
+  // Missing indexes are informational — they do NOT block upToDate
+  const missingIndexes: string[] = []
+  for (const index of SENTINEL_INDEXES) {
     if (!existingIndexes.has(index.id)) {
-      missing.push(index.label)
+      missingIndexes.push(index.label)
     }
   }
 
@@ -216,12 +269,17 @@ export async function checkSchema(db: DrizzleDb, caseSensitive: boolean): Promis
     status: 'connected',
     upToDate: missing.length === 0,
     missing,
+    missingIndexes,
     migrationVersion: MIGRATION_VERSION,
     normalizeSlugsOnUpgrade: !caseSensitive,
   }
 }
 
-async function ensureMigrationTracking(db: DrizzleDb) {
+// ---------------------------------------------------------------------------
+// Migration tracking
+// ---------------------------------------------------------------------------
+
+async function ensureMigrationTracking(db: DbExecutor) {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id varchar(64) PRIMARY KEY NOT NULL,
@@ -230,8 +288,7 @@ async function ensureMigrationTracking(db: DrizzleDb) {
   `)
 }
 
-async function recordMigration(db: DrizzleDb, id: string) {
-  await ensureMigrationTracking(db)
+async function recordMigration(db: DbExecutor, id: string) {
   const escaped = id.replace(/'/g, "''")
   await db.execute(sql.raw(`
     INSERT INTO schema_migrations (id)
@@ -240,8 +297,12 @@ async function recordMigration(db: DrizzleDb, id: string) {
   `))
 }
 
-async function createUpdatedAtTrigger(db: DrizzleDb, warnings: string[]) {
-  await db.execute(sql`
+// ---------------------------------------------------------------------------
+// Schema application (unified — handles both empty and existing databases)
+// ---------------------------------------------------------------------------
+
+async function createUpdatedAtTrigger(db: DbExecutor, warnings: string[]) {
+  await executeStatement(db, `
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
     BEGIN
@@ -249,283 +310,190 @@ async function createUpdatedAtTrigger(db: DrizzleDb, warnings: string[]) {
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql
+  `, warnings, 'update_updated_at_column function', { critical: true })
+
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_trigger
+      WHERE tgrelid = 'public.links'::regclass
+        AND tgname = 'update_links_updated_at'
+        AND NOT tgisinternal
+    ) AS exists
   `)
 
-  for (const statement of [
-    `CREATE TRIGGER update_links_updated_at
+  if (Boolean(result.rows[0]?.exists)) {
+    return
+  }
+
+  await executeStatement(db, `
+    CREATE TRIGGER update_links_updated_at
       BEFORE UPDATE ON links
       FOR EACH ROW
-      EXECUTE FUNCTION update_updated_at_column()`,
-    `CREATE TRIGGER update_links_updated_at
-      BEFORE UPDATE ON links
-      FOR EACH ROW
-      EXECUTE PROCEDURE update_updated_at_column()`,
-  ]) {
-    try {
-      await db.execute(sql.raw(statement))
+      EXECUTE FUNCTION update_updated_at_column()
+  `, warnings, 'update_links_updated_at trigger', { critical: true })
+}
+
+async function hasLinksSenderIdForeignKey(db: DbExecutor): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE contype = 'f'
+        AND conrelid = 'public.links'::regclass
+        AND confrelid = 'public.sender_ids'::regclass
+        AND conkey = ARRAY[
+          (
+            SELECT attnum
+            FROM pg_attribute
+            WHERE attrelid = 'public.links'::regclass
+              AND attname = 'sender_id'
+              AND NOT attisdropped
+          )
+        ]
+    ) AS exists
+  `)
+  return Boolean(result.rows[0]?.exists)
+}
+
+async function ensureLinksSenderIdForeignKey(db: DbExecutor, warnings: string[]) {
+  if (await hasLinksSenderIdForeignKey(db)) {
+    return
+  }
+
+  try {
+    await db.execute(sql.raw(`
+      ALTER TABLE links ADD CONSTRAINT links_sender_id_sender_ids_id_fk
+        FOREIGN KEY (sender_id) REFERENCES public.sender_ids(id)
+        ON DELETE SET NULL ON UPDATE NO ACTION
+    `))
+  } catch (err: any) {
+    // A correctly named constraint may have been created by a previous
+    // attempt, or the relationship may use a provider-generated name.
+    if (await hasLinksSenderIdForeignKey(db)) {
       return
-    } catch (err: any) {
-      if (err.code === '42710' || err.message?.includes('already exists')) {
-        return
-      }
     }
+    warnings.push(`links.sender_id foreign key: ${err.message || 'Unknown error'}`)
   }
-
-  warnings.push('update_links_updated_at trigger: could not be created')
 }
 
-async function runBaseSchema(db: DrizzleDb, warnings: string[]) {
-  await db.transaction(async (tx) => {
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS tags (
-        id varchar(64) PRIMARY KEY NOT NULL,
-        name varchar(120) NOT NULL,
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
+/**
+ * Single unified function that applies the full schema.
+ * Safe for both empty databases and existing databases with partial schema.
+ *
+ * 1. Creates all tables with CREATE TABLE IF NOT EXISTS
+ * 2. Adds missing columns with ALTER TABLE ADD COLUMN IF NOT EXISTS
+ * 3. Adds foreign keys (skipped if already present)
+ * 4. Inserts default data
+ * 5. Creates trigger
+ */
+async function applySchema(db: DbExecutor, warnings: string[]) {
+  // --- Step 1: Create all tables (order matters for foreign keys) ---
 
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS sender_ids (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        name varchar(6) NOT NULL,
-        description text,
-        is_active boolean DEFAULT true,
-        is_default boolean DEFAULT false,
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_sender_ids_name_unique ON sender_ids(name)
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS links (
-        id varchar(64) PRIMARY KEY NOT NULL,
-        slug varchar(128) NOT NULL UNIQUE,
-        url text NOT NULL,
-        comment text,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now(),
-        expiration bigint,
-        title text,
-        description text,
-        image text,
-        apple text,
-        google text,
-        cloaking boolean DEFAULT false,
-        redirect_with_query boolean DEFAULT false,
-        password text,
-        unsafe boolean DEFAULT false,
-        tag_id varchar(64) REFERENCES tags(id) ON DELETE SET NULL,
-        sender_id uuid REFERENCES sender_ids(id) ON DELETE SET NULL
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS access_logs (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        link_id varchar(64) REFERENCES links(id) ON DELETE SET NULL,
-        slug varchar(128),
-        url text,
-        ua text,
-        ip inet,
-        referer text,
-        country varchar(120),
-        region text,
-        city text,
-        timezone text,
-        language text,
-        os text,
-        browser text,
-        browser_type text,
-        device text,
-        device_type text,
-        latitude double precision DEFAULT 0,
-        longitude double precision DEFAULT 0,
-        utm_source varchar(128),
-        utm_medium varchar(128),
-        utm_campaign varchar(128),
-        utm_term varchar(128),
-        utm_content varchar(128),
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS qr_scans (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        link_id varchar(64) REFERENCES links(id) ON DELETE CASCADE,
-        slug varchar(128),
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS site_settings (
-        id varchar(8) PRIMARY KEY NOT NULL,
-        homepage_mode varchar(20),
-        redirect_url varchar(2048),
-        redirect_timeout bigint DEFAULT 3,
-        bio_content jsonb,
-        trai_sms_enabled boolean DEFAULT false
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        username varchar(64) NOT NULL UNIQUE,
-        display_name varchar(120),
-        password_hash text NOT NULL,
-        permissions text[] NOT NULL DEFAULT '{}',
-        is_active boolean DEFAULT true,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        actor_id varchar(64) NOT NULL,
-        actor_username varchar(128) NOT NULL,
-        action varchar(32) NOT NULL,
-        entity_type varchar(32) NOT NULL,
-        entity_id varchar(128),
-        entity_label varchar(256),
-        details jsonb,
-        ip inet,
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid REFERENCES users(id) ON DELETE CASCADE,
-        name varchar(128) NOT NULL,
-        key_prefix varchar(16) NOT NULL,
-        key_hash text NOT NULL,
-        key_encrypted text,
-        permissions text[] NOT NULL DEFAULT '{}',
-        is_active boolean DEFAULT true,
-        last_used_at timestamp with time zone,
-        expires_at timestamp with time zone,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS webhooks (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid REFERENCES users(id) ON DELETE CASCADE,
-        name varchar(128) NOT NULL,
-        url text NOT NULL,
-        events text[] NOT NULL DEFAULT '{}',
-        secret text NOT NULL,
-        is_active boolean DEFAULT true,
-        failure_count bigint DEFAULT 0,
-        last_triggered_at timestamp with time zone,
-        created_at timestamp with time zone DEFAULT now(),
-        updated_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS webhook_deliveries (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        webhook_id uuid REFERENCES webhooks(id) ON DELETE CASCADE,
-        event_type varchar(64) NOT NULL,
-        payload jsonb NOT NULL,
-        response_status bigint,
-        response_body text,
-        error text,
-        delivered_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      CREATE TABLE IF NOT EXISTS api_rate_limits (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        api_key_id uuid REFERENCES api_keys(id) ON DELETE CASCADE,
-        endpoint varchar(256) NOT NULL,
-        request_count bigint DEFAULT 0,
-        window_start timestamp with time zone DEFAULT now(),
-        created_at timestamp with time zone DEFAULT now()
-      )
-    `)
-
-    await tx.execute(sql`
-      INSERT INTO site_settings (id, homepage_mode, redirect_url, redirect_timeout, bio_content)
-      VALUES (
-        'default',
-        'DEFAULT',
-        NULL,
-        3,
-        '{"profile": {"name": "Syano", "bio": null, "initials": "SY", "avatar_url": null}, "links": [], "socials": []}'::jsonb
-      )
-      ON CONFLICT (id) DO NOTHING
-    `)
-  })
-
-  await createUpdatedAtTrigger(db, warnings)
-}
-
-async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
-  if (await tableExists(db, 'links')) {
-    await executeStatement(
-      db,
-      `CREATE TABLE IF NOT EXISTS qr_scans (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-        link_id varchar(64) REFERENCES links(id) ON DELETE cascade,
-        slug varchar(128),
-        created_at timestamp with time zone DEFAULT now()
-      )`,
-      warnings,
-      'qr_scans table',
-      { critical: true },
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS tags (
+      id varchar(64) PRIMARY KEY NOT NULL,
+      name varchar(120) NOT NULL,
+      created_at timestamp with time zone DEFAULT now()
     )
-  }
+  `, warnings, 'tags table', { critical: true })
 
-  if (await tableExists(db, 'site_settings')) {
-    await executeStatement(
-      db,
-      'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS redirect_timeout bigint DEFAULT 3',
-      warnings,
-      'site_settings.redirect_timeout',
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS sender_ids (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name varchar(6) NOT NULL,
+      description text,
+      is_active boolean DEFAULT true,
+      is_default boolean DEFAULT false,
+      created_at timestamp with time zone DEFAULT now()
     )
-    await executeStatement(
-      db,
-      'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS trai_sms_enabled boolean DEFAULT false',
-      warnings,
-      'site_settings.trai_sms_enabled',
-    )
-  } else {
-    warnings.push('site_settings table: missing — skipped column updates')
-  }
+  `, warnings, 'sender_ids table', { critical: true })
 
-  if (await tableExists(db, 'access_logs')) {
-    await executeStatement(
-      db,
-      `ALTER TABLE access_logs
-        ADD COLUMN IF NOT EXISTS utm_source varchar(128),
-        ADD COLUMN IF NOT EXISTS utm_medium varchar(128),
-        ADD COLUMN IF NOT EXISTS utm_campaign varchar(128),
-        ADD COLUMN IF NOT EXISTS utm_term varchar(128),
-        ADD COLUMN IF NOT EXISTS utm_content varchar(128)`,
-      warnings,
-      'access_logs UTM columns',
-    )
-  } else {
-    warnings.push('access_logs table: missing — skipped UTM columns')
-  }
+  await executeStatement(db, `
+    CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids(name)
+  `, warnings, 'sender_ids_name_unique index', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS users (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db,
+    'DROP INDEX IF EXISTS idx_sender_ids_name_unique',
+    warnings, 'legacy sender_ids_name_unique index cleanup', { critical: true },
+  )
+
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS links (
+      id varchar(64) PRIMARY KEY NOT NULL,
+      slug varchar(128) NOT NULL UNIQUE,
+      url text NOT NULL,
+      comment text,
+      created_at timestamp with time zone DEFAULT now(),
+      updated_at timestamp with time zone DEFAULT now(),
+      expiration bigint,
+      title text,
+      description text,
+      image text,
+      apple text,
+      google text,
+      cloaking boolean DEFAULT false,
+      redirect_with_query boolean DEFAULT false,
+      password text,
+      unsafe boolean DEFAULT false,
+      tag_id varchar(64) REFERENCES tags(id) ON DELETE SET NULL,
+      sender_id uuid REFERENCES sender_ids(id) ON DELETE SET NULL
+    )
+  `, warnings, 'links table', { critical: true })
+
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS access_logs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      link_id varchar(64) REFERENCES links(id) ON DELETE SET NULL,
+      slug varchar(128),
+      url text,
+      ua text,
+      ip inet,
+      referer text,
+      country varchar(120),
+      region text,
+      city text,
+      timezone text,
+      language text,
+      os text,
+      browser text,
+      browser_type text,
+      device text,
+      device_type text,
+      latitude double precision DEFAULT 0,
+      longitude double precision DEFAULT 0,
+      utm_source varchar(128),
+      utm_medium varchar(128),
+      utm_campaign varchar(128),
+      utm_term varchar(128),
+      utm_content varchar(128),
+      created_at timestamp with time zone DEFAULT now()
+    )
+  `, warnings, 'access_logs table', { critical: true })
+
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS qr_scans (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      link_id varchar(64) REFERENCES links(id) ON DELETE CASCADE,
+      slug varchar(128),
+      created_at timestamp with time zone DEFAULT now()
+    )
+  `, warnings, 'qr_scans table', { critical: true })
+
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS site_settings (
+      id varchar(8) PRIMARY KEY NOT NULL,
+      homepage_mode varchar(20),
+      redirect_url varchar(2048),
+      redirect_timeout bigint DEFAULT 3,
+      bio_content jsonb,
+      trai_sms_enabled boolean DEFAULT false
+    )
+  `, warnings, 'site_settings table', { critical: true })
+
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS users (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       username varchar(64) NOT NULL UNIQUE,
       display_name varchar(120),
       password_hash text NOT NULL,
@@ -533,16 +501,12 @@ async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
       is_active boolean DEFAULT true,
       created_at timestamp with time zone DEFAULT now(),
       updated_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'users table',
-    { critical: true },
-  )
+    )
+  `, warnings, 'users table', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS audit_logs (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       actor_id varchar(64) NOT NULL,
       actor_username varchar(128) NOT NULL,
       action varchar(32) NOT NULL,
@@ -552,16 +516,12 @@ async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
       details jsonb,
       ip inet,
       created_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'audit_logs table',
-    { critical: true },
-  )
+    )
+  `, warnings, 'audit_logs table', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS api_keys (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid REFERENCES users(id) ON DELETE CASCADE,
       name varchar(128) NOT NULL,
       key_prefix varchar(16) NOT NULL,
@@ -573,25 +533,12 @@ async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
       expires_at timestamp with time zone,
       created_at timestamp with time zone DEFAULT now(),
       updated_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'api_keys table',
-    { critical: true },
-  )
-
-  if (await tableExists(db, 'api_keys')) {
-    await executeStatement(
-      db,
-      'ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_encrypted text',
-      warnings,
-      'api_keys.key_encrypted',
     )
-  }
+  `, warnings, 'api_keys table', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS webhooks (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid REFERENCES users(id) ON DELETE CASCADE,
       name varchar(128) NOT NULL,
       url text NOT NULL,
@@ -602,16 +549,12 @@ async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
       last_triggered_at timestamp with time zone,
       created_at timestamp with time zone DEFAULT now(),
       updated_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'webhooks table',
-    { critical: true },
-  )
+    )
+  `, warnings, 'webhooks table', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS webhook_deliveries (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       webhook_id uuid REFERENCES webhooks(id) ON DELETE CASCADE,
       event_type varchar(64) NOT NULL,
       payload jsonb NOT NULL,
@@ -619,79 +562,84 @@ async function runIncrementalSchema(db: DrizzleDb, warnings: string[]) {
       response_body text,
       error text,
       delivered_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'webhook_deliveries table',
-    { critical: true },
-  )
+    )
+  `, warnings, 'webhook_deliveries table', { critical: true })
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS api_rate_limits (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  await executeStatement(db, `
+    CREATE TABLE IF NOT EXISTS api_rate_limits (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       api_key_id uuid REFERENCES api_keys(id) ON DELETE CASCADE,
       endpoint varchar(256) NOT NULL,
       request_count bigint DEFAULT 0,
       window_start timestamp with time zone DEFAULT now(),
       created_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'api_rate_limits table',
-    { critical: true },
+    )
+  `, warnings, 'api_rate_limits table', { critical: true })
+
+  // --- Step 2: Add missing columns for existing databases ---
+
+  // Tables are all created above, so these ALTERs cover both old installations
+  // and partially provisioned schemas. They are critical: recording a version
+  // while a required column is absent makes a failed upgrade look successful.
+  await executeStatement(db,
+    'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS redirect_timeout bigint DEFAULT 3',
+    warnings, 'site_settings.redirect_timeout', { critical: true },
+  )
+  await executeStatement(db,
+    'ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS trai_sms_enabled boolean DEFAULT false',
+    warnings, 'site_settings.trai_sms_enabled', { critical: true },
+  )
+  await executeStatement(db,
+    `ALTER TABLE access_logs
+      ADD COLUMN IF NOT EXISTS utm_source varchar(128),
+      ADD COLUMN IF NOT EXISTS utm_medium varchar(128),
+      ADD COLUMN IF NOT EXISTS utm_campaign varchar(128),
+      ADD COLUMN IF NOT EXISTS utm_term varchar(128),
+      ADD COLUMN IF NOT EXISTS utm_content varchar(128)`,
+    warnings, 'access_logs UTM columns', { critical: true },
+  )
+  await executeStatement(db,
+    'ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_encrypted text',
+    warnings, 'api_keys.key_encrypted', { critical: true },
+  )
+  await executeStatement(db,
+    'ALTER TABLE sender_ids ADD COLUMN IF NOT EXISTS is_default boolean DEFAULT false',
+    warnings, 'sender_ids.is_default', { critical: true },
+  )
+  await executeStatement(db,
+    'ALTER TABLE links ADD COLUMN IF NOT EXISTS sender_id uuid',
+    warnings, 'links.sender_id', { critical: true },
   )
 
-  await executeStatement(
-    db,
-    `CREATE TABLE IF NOT EXISTS sender_ids (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      name varchar(6) NOT NULL,
-      description text,
-      is_active boolean DEFAULT true,
-      is_default boolean DEFAULT false,
-      created_at timestamp with time zone DEFAULT now()
-    )`,
-    warnings,
-    'sender_ids table',
-    { critical: true },
-  )
+  // --- Step 3: Add foreign keys (safe — skipped if already present) ---
 
-  if (await tableExists(db, 'sender_ids')) {
-    await executeStatement(
-      db,
-      'ALTER TABLE sender_ids ADD COLUMN IF NOT EXISTS is_default boolean DEFAULT false',
-      warnings,
-      'sender_ids.is_default',
-    )
-    await executeStatement(
-      db,
-      'CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids USING btree (name)',
-      warnings,
-      'sender_ids_name_unique index',
-    )
-  }
+  // Deferred until after the required-schema transaction so legacy data that
+  // violates the new relationship cannot roll back a successful core upgrade.
 
-  if (await tableExists(db, 'links')) {
-    await executeStatement(
-      db,
-      'ALTER TABLE links ADD COLUMN IF NOT EXISTS sender_id uuid',
-      warnings,
-      'links.sender_id',
-    )
-  }
+  // --- Step 4: Insert default data ---
 
-  if (await tableExists(db, 'links') && await tableExists(db, 'sender_ids')) {
-    await executeStatement(
-      db,
-      `ALTER TABLE links ADD CONSTRAINT links_sender_id_sender_ids_id_fk
-        FOREIGN KEY (sender_id) REFERENCES public.sender_ids(id)
-        ON DELETE SET NULL ON UPDATE NO ACTION`,
-      warnings,
-      'links_sender_id_sender_ids_id_fk',
+  await executeStatement(db, `
+    INSERT INTO site_settings (id, homepage_mode, redirect_url, redirect_timeout, bio_content)
+    VALUES (
+      'default',
+      'DEFAULT',
+      NULL,
+      3,
+      '{"profile": {"name": "Syano", "bio": null, "initials": "SY", "avatar_url": null}, "links": [], "socials": []}'::jsonb
     )
-  }
+    ON CONFLICT (id) DO NOTHING
+  `, warnings, 'default site_settings row', { critical: true })
+
+  // --- Step 5: Create updated_at trigger ---
+
+  await createUpdatedAtTrigger(db, warnings)
 }
 
-async function runIndexes(db: DrizzleDb, warnings: string[]) {
+// ---------------------------------------------------------------------------
+// Index application
+// ---------------------------------------------------------------------------
+
+async function runIndexes(db: DbExecutor, warnings: string[]) {
   for (const [name, statement] of STANDARD_INDEXES) {
     await createIndexSafe(db, name, statement, warnings)
   }
@@ -703,35 +651,35 @@ async function runIndexes(db: DrizzleDb, warnings: string[]) {
   }
 }
 
-async function normalizeLinkSlugs(db: DrizzleDb, warnings: string[]) {
-  if (!(await tableExists(db, 'links'))) {
+// ---------------------------------------------------------------------------
+// Data normalization
+// ---------------------------------------------------------------------------
+
+async function normalizeLinkSlugs(db: DbExecutor, warnings: string[]) {
+  const conflicts = await db.execute(sql`
+    SELECT LOWER(TRIM(slug)) AS normalized, COUNT(*)::int AS count
+    FROM links
+    GROUP BY LOWER(TRIM(slug))
+    HAVING COUNT(*) > 1
+  `)
+
+  if (conflicts.rows.length > 0) {
+    warnings.push(
+      `Slug normalization skipped: ${conflicts.rows.length} slug group(s) differ only by case. Resolve duplicates manually.`,
+    )
     return
   }
 
-  try {
-    const conflicts = await db.execute(sql`
-      SELECT LOWER(TRIM(slug)) AS normalized, COUNT(*)::int AS count
-      FROM links
-      GROUP BY LOWER(TRIM(slug))
-      HAVING COUNT(*) > 1
-    `)
-
-    if (conflicts.rows.length > 0) {
-      warnings.push(
-        `Slug normalization skipped: ${conflicts.rows.length} slug group(s) differ only by case. Resolve duplicates manually.`,
-      )
-      return
-    }
-
-    await db.execute(sql`
-      UPDATE links SET slug = LOWER(TRIM(slug)) WHERE slug <> LOWER(TRIM(slug))
-    `)
-  } catch (err: any) {
-    warnings.push(`Slug normalization: ${err.message || 'Unknown error'}`)
-  }
+  await db.execute(sql`
+    UPDATE links SET slug = LOWER(TRIM(slug)) WHERE slug <> LOWER(TRIM(slug))
+  `)
 }
 
-async function analyzeTables(db: DrizzleDb, warnings: string[]) {
+// ---------------------------------------------------------------------------
+// Statistics
+// ---------------------------------------------------------------------------
+
+async function analyzeTables(db: DbExecutor, warnings: string[]) {
   for (const table of ['links', 'access_logs', 'qr_scans', 'tags', 'api_keys', 'api_rate_limits'] as const) {
     if (!(await tableExists(db, table))) {
       continue
@@ -739,6 +687,10 @@ async function analyzeTables(db: DrizzleDb, warnings: string[]) {
     await executeStatement(db, `ANALYZE ${table}`, warnings, `ANALYZE ${table}`)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Upgrade lock
+// ---------------------------------------------------------------------------
 
 export function acquireUpgradeLock() {
   if (globalStore.__syanoUpgradeInProgress) {
@@ -755,28 +707,69 @@ export function releaseUpgradeLock() {
   globalStore.__syanoUpgradeInProgress = false
 }
 
+async function acquireDatabaseUpgradeLock(db: DbExecutor) {
+  const result = await db.execute(sql`
+    SELECT pg_try_advisory_xact_lock(${DATABASE_UPGRADE_LOCK_KEY}::bigint) AS locked
+  `)
+
+  if (!Boolean(result.rows[0]?.locked)) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Database upgrade already in progress',
+      message: 'Another application instance is upgrading this database. Wait for it to finish and try again.',
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main upgrade entry point
+// ---------------------------------------------------------------------------
+
 export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean): Promise<UpgradeResult> {
   const warnings: string[] = []
-  let appliedBaseSchema = false
 
-  const empty = await isDatabaseEmpty(db)
-  if (empty) {
-    await runBaseSchema(db, warnings)
-    appliedBaseSchema = true
-    await recordMigration(db, 'base_schema')
-  }
+  const freshInstall = !(await hasApplicationSchema(db))
 
-  await runIncrementalSchema(db, warnings)
+  // PostgreSQL DDL is transactional. Keeping required schema work and the
+  // migration marker in one transaction guarantees that a failed fresh
+  // install leaves no half-applied Syano schema or misleading version record.
+  // Best-effort indexes run afterwards: PostgreSQL marks a transaction failed
+  // after any index error, even when that error is caught in application code.
+  await db.transaction(async (tx) => {
+    await acquireDatabaseUpgradeLock(tx)
+    await ensureMigrationTracking(tx)
+    await applySchema(tx, warnings)
 
-  if (!caseSensitive) {
-    await normalizeLinkSlugs(db, warnings)
-  }
+    if (!caseSensitive) {
+      await normalizeLinkSlugs(tx, warnings)
+    }
+
+    if (freshInstall) {
+      await recordMigration(tx, 'base_schema')
+    }
+    await recordMigration(tx, `v${MIGRATION_VERSION}`)
+  })
+
+  // Existing data can prevent a new foreign key from being added. Keep that
+  // repair outside the core transaction so the usable schema is retained and
+  // the administrator receives a precise warning to resolve the bad rows.
+  await ensureLinksSenderIdForeignKey(db, warnings)
 
   await runIndexes(db, warnings)
-  await analyzeTables(db, warnings)
-  await recordMigration(db, `v${MIGRATION_VERSION}`)
 
-  const message = appliedBaseSchema
+  // ANALYZE is deliberately outside the schema transaction. Its failure only
+  // affects planner statistics, never the validity of the applied schema.
+  await analyzeTables(db, warnings)
+
+  // Post-upgrade validation: re-check schema to provide accurate status
+  let schemaCheck: SchemaCheckResult | undefined
+  try {
+    schemaCheck = await checkSchema(db, caseSensitive)
+  } catch {
+    // Non-critical — the upgrade itself succeeded
+  }
+
+  const message = freshInstall
     ? warnings.length
       ? `Database populated with ${warnings.length} index warning(s).`
       : 'Database populated successfully!'
@@ -788,7 +781,8 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
     success: true,
     message,
     warnings: warnings.length ? warnings : undefined,
-    appliedBaseSchema,
+    appliedBaseSchema: freshInstall,
     migrationVersion: MIGRATION_VERSION,
+    schemaCheck,
   }
 }

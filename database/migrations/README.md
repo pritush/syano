@@ -38,7 +38,7 @@ psql "your_connection_string" -f database/migrations/add_key_encrypted_column.sq
 ## Migration Files
 
 ### `complete_schema_upgrade.sql`
-Complete schema with all tables and columns. Includes:
+`psql` entry point for the canonical `database/schema.sql` installer. It includes:
 - QR code scans tracking
 - UTM parameter tracking
 - User management
@@ -47,7 +47,9 @@ Complete schema with all tables and columns. Includes:
 - Webhooks
 - Rate limiting
 
-**Safe to run multiple times** - uses `IF NOT EXISTS` and `IF EXISTS` clauses.
+It is safe to run multiple times and wraps the schema changes in a transaction.
+Use `database/schema.sql` directly when pasting SQL into a cloud provider's SQL
+console; the wrapper uses psql's relative-include command.
 
 ### `add_key_encrypted_column.sql`
 Adds only the `key_encrypted` column to the `api_keys` table.

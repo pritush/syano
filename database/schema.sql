@@ -2,7 +2,10 @@
 -- PostgreSQL 14+
 -- 
 -- This script creates all necessary tables for the Syano URL shortener
--- Run this script on a fresh PostgreSQL database
+-- Safe for fresh installs and repeat runs against an existing Syano database.
+-- PostgreSQL 14+ provides gen_random_uuid() without a separately installed extension.
+
+BEGIN;
 
 -- Tags table for organizing links
 CREATE TABLE IF NOT EXISTS tags (
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS sender_ids (
     is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sender_ids_name_unique ON sender_ids(name);
+CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids(name);
 
 -- Links table for shortened URLs
 CREATE TABLE IF NOT EXISTS links (
@@ -170,15 +173,66 @@ CREATE TABLE IF NOT EXISTS api_rate_limits (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Bring installations created by older releases up to the current schema.
+-- The tables above are created first, so every statement is safe on a fresh DB.
+ALTER TABLE site_settings
+    ADD COLUMN IF NOT EXISTS redirect_timeout BIGINT DEFAULT 3,
+    ADD COLUMN IF NOT EXISTS trai_sms_enabled BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE access_logs
+    ADD COLUMN IF NOT EXISTS utm_source VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS utm_medium VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS utm_campaign VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS utm_term VARCHAR(128),
+    ADD COLUMN IF NOT EXISTS utm_content VARCHAR(128);
+
+ALTER TABLE api_keys
+    ADD COLUMN IF NOT EXISTS key_encrypted TEXT;
+
+ALTER TABLE sender_ids
+    ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE links
+    ADD COLUMN IF NOT EXISTS sender_id UUID;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE contype = 'f'
+          AND conrelid = 'public.links'::regclass
+          AND confrelid = 'public.sender_ids'::regclass
+          AND conkey = ARRAY[
+              (SELECT attnum FROM pg_attribute
+               WHERE attrelid = 'public.links'::regclass
+                 AND attname = 'sender_id'
+                 AND NOT attisdropped)
+          ]
+    ) THEN
+        ALTER TABLE links
+            ADD CONSTRAINT links_sender_id_sender_ids_id_fk
+            FOREIGN KEY (sender_id) REFERENCES sender_ids(id)
+            ON DELETE SET NULL;
+    END IF;
+END $$;
+
 -- Create indexes for better performance
--- Basic indexes
-CREATE INDEX IF NOT EXISTS idx_links_slug ON links(slug);
-CREATE INDEX IF NOT EXISTS idx_links_tag_id ON links(tag_id);
-CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_access_logs_link_id ON access_logs(link_id);
-CREATE INDEX IF NOT EXISTS idx_access_logs_slug ON access_logs(slug);
+-- These match the dashboard upgrade's managed index set.
 CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_access_logs_country ON access_logs(country);
+CREATE INDEX IF NOT EXISTS idx_access_logs_country ON access_logs(country) WHERE country IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_access_logs_browser ON access_logs(browser_type) WHERE browser_type IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_access_logs_device ON access_logs(device_type) WHERE device_type IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_access_logs_os ON access_logs(os) WHERE os IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_access_logs_referer ON access_logs(referer) WHERE referer IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_qr_scans_link_date ON qr_scans(link_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_qr_scans_slug ON qr_scans(slug);
+CREATE INDEX IF NOT EXISTS idx_links_tag_id_filter ON links(tag_id) WHERE tag_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_key_endpoint ON api_rate_limits(api_key_id, endpoint, window_start);
+CREATE INDEX IF NOT EXISTS idx_links_id_tag ON links(id DESC, tag_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
@@ -189,46 +243,10 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix ON api_keys(key_prefix);
 CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_webhooks_user_id ON webhooks(user_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
-CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(delivered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_delivered_at ON webhook_deliveries(delivered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_api_key_id ON api_rate_limits(api_key_id);
-CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window ON api_rate_limits(window_start);
-
--- Composite indexes for common query patterns (Performance Optimization)
-CREATE INDEX IF NOT EXISTS idx_access_logs_link_created ON access_logs(link_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_access_logs_slug_created ON access_logs(slug, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_links_tag_created ON links(tag_id, created_at DESC);
-
--- Partial indexes for filtered queries (Performance Optimization)
-CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL;
-
--- Analytics query optimization
-CREATE INDEX IF NOT EXISTS idx_access_logs_slug_date ON access_logs(slug, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_access_logs_link_date ON access_logs(link_id, created_at DESC);
-
--- Partial indexes for analytics aggregations (faster WHERE clauses)
-CREATE INDEX IF NOT EXISTS idx_access_logs_browser ON access_logs(browser_type) WHERE browser_type IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_access_logs_device ON access_logs(device_type) WHERE device_type IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_access_logs_os ON access_logs(os) WHERE os IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_access_logs_referer ON access_logs(referer) WHERE referer IS NOT NULL;
-
--- QR scans optimization
-CREATE INDEX IF NOT EXISTS idx_qr_scans_link_date ON qr_scans(link_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_qr_scans_slug ON qr_scans(slug);
-
--- Tag filtering optimization
-CREATE INDEX IF NOT EXISTS idx_links_tag_id_filter ON links(tag_id) WHERE tag_id IS NOT NULL;
-
--- Link expiration checks
-CREATE INDEX IF NOT EXISTS idx_links_expiration ON links(expiration) WHERE expiration IS NOT NULL;
-
--- API rate limiting optimization
-CREATE INDEX IF NOT EXISTS idx_api_rate_limits_key_endpoint ON api_rate_limits(api_key_id, endpoint, window_start);
-
--- Composite index for link listing with tag filter
-CREATE INDEX IF NOT EXISTS idx_links_id_tag ON links(id DESC, tag_id);
-
--- Audit logs optimization
-CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id);
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window_start ON api_rate_limits(window_start);
+DROP INDEX IF EXISTS idx_sender_ids_name_unique;
 
 -- Insert default site settings
 INSERT INTO site_settings (id, homepage_mode, redirect_url, redirect_timeout, bio_content)
@@ -250,11 +268,31 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to automatically update updated_at
-CREATE TRIGGER update_links_updated_at
-    BEFORE UPDATE ON links
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- Create the trigger once. Using a DO block keeps re-runs idempotent.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgrelid = 'public.links'::regclass
+          AND tgname = 'update_links_updated_at'
+          AND NOT tgisinternal
+    ) THEN
+        CREATE TRIGGER update_links_updated_at
+            BEFORE UPDATE ON links
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+-- Keep CLI installs aligned with the dashboard migration history.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id VARCHAR(64) PRIMARY KEY NOT NULL,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO schema_migrations (id)
+VALUES ('base_schema'), ('v2')
+ON CONFLICT (id) DO NOTHING;
 
 -- Success message
 DO $$
@@ -262,5 +300,7 @@ BEGIN
     RAISE NOTICE 'Syano database schema created successfully!';
     RAISE NOTICE 'You can now start the application.';
 END $$;
+
+COMMIT;
 
 

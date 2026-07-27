@@ -15,6 +15,20 @@
       "when": 1782554835985,
       "tag": "0001_stormy_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785146835985,
+      "tag": "0002_steady_bootstrap",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785163924530,
+      "tag": "0003_breezy_mentor",
+      "breakpoints": true
     }
   ]
 }

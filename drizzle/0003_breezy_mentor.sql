@@ -1,0 +1,1 @@
+ALTER TABLE "sender_ids" ADD COLUMN "is_default" boolean DEFAULT false;
