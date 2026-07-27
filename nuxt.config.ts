@@ -103,6 +103,7 @@ export default defineNuxtConfig({
     public: {
       previewMode: process.env.NUXT_PUBLIC_PREVIEW_MODE || '',
       slugDefaultLength: Number(process.env.NUXT_PUBLIC_SLUG_DEFAULT_LENGTH || 6),
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
     },
   },
   routeRules: {

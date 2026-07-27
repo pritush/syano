@@ -5,6 +5,7 @@ export default defineCachedEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const query = getQuery(event)
   const format = (query.format as string) || 'svg'
+  const config = useRuntimeConfig()
 
   if (!slug) {
     throw createError({
@@ -13,13 +14,37 @@ export default defineCachedEventHandler(async (event) => {
     })
   }
 
-  // Get the origin from the request
-  const origin = event.node.req?.headers?.origin || event.node.req?.headers?.host || 'http://localhost:7466'
-  const protocol = origin.includes('localhost') ? 'http://' : 'https://'
-  const host = origin.replace(/^https?:\/\//, '')
+  // Priority: 1. Env variable (NUXT_PUBLIC_SITE_URL), 2. Auto-detect from headers, 3. Localhost fallback
+  let baseUrl = ''
+  
+  // 1. Check for configured site URL (highest priority)
+  if (config.public.siteUrl) {
+    baseUrl = config.public.siteUrl
+  } 
+  // 2. Auto-detect from request headers
+  else {
+    const host = event.node.req?.headers?.host
+    const forwardedProto = event.node.req?.headers['x-forwarded-proto']
+    const forwardedHost = event.node.req?.headers['x-forwarded-host']
+    
+    // Use forwarded headers (for proxies/load balancers) or direct headers
+    const detectedHost = forwardedHost || host
+    const detectedProto = forwardedProto || (detectedHost?.includes('localhost') ? 'http' : 'https')
+    
+    if (detectedHost) {
+      baseUrl = `${detectedProto}://${detectedHost}`
+    } 
+    // 3. Final fallback to localhost
+    else {
+      baseUrl = 'http://localhost:7466'
+    }
+  }
+  
+  // Ensure no trailing slash
+  baseUrl = baseUrl.replace(/\/$/, '')
   
   // Generate QR code URL with ?r=qr parameter for tracking
-  const qrUrl = `${protocol}${host}/${slug}?r=qr`
+  const qrUrl = `${baseUrl}/${slug}?r=qr`
 
   try {
     if (format === 'svg') {
