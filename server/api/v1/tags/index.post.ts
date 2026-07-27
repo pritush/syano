@@ -18,8 +18,13 @@ const createTagSchema = z.object({
  * Authentication: Supports both JWT tokens (dashboard) and API keys (external)
  */
 export default defineEventHandler(async (event) => {
+  console.log('[Tag Creation] Starting tag creation request')
+  
   const auth = await requireUnifiedAuth(event)
+  console.log('[Tag Creation] Auth successful, user:', auth.userId, 'type:', auth.type)
+  
   requireUnifiedPermission(auth, 'tags:manage')
+  console.log('[Tag Creation] Permission check passed')
   
   // Rate limit (only for API key requests)
   if (auth.type === 'apikey') {
@@ -33,9 +38,12 @@ export default defineEventHandler(async (event) => {
   }
   
   const body = await readBody(event)
+  console.log('[Tag Creation] Request body:', body)
+  
   const validation = createTagSchema.safeParse(body)
   
   if (!validation.success) {
+    console.error('[Tag Creation] Validation failed:', validation.error.errors)
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
@@ -45,7 +53,10 @@ export default defineEventHandler(async (event) => {
   }
   
   const data = validation.data
+  console.log('[Tag Creation] Validated data:', data)
+  
   const db = await useDrizzle(event)
+  console.log('[Tag Creation] Database connection acquired')
   
   // Check if tag name already exists
   const [existing] = await db
@@ -55,6 +66,7 @@ export default defineEventHandler(async (event) => {
     .limit(1)
   
   if (existing) {
+    console.log('[Tag Creation] Tag already exists:', existing.name)
     throw createError({
       statusCode: 409,
       statusMessage: 'Conflict',
@@ -62,21 +74,33 @@ export default defineEventHandler(async (event) => {
     })
   }
   
+  console.log('[Tag Creation] Tag name is unique, inserting...')
+  
   // Create tag
-  const [tag] = await db
+  const tagId = crypto.randomUUID()
+  console.log('[Tag Creation] Generated tag ID:', tagId)
+  
+  const insertedTags = await db
     .insert(tags)
     .values({
-      id: crypto.randomUUID(),
+      id: tagId,
       name: data.name,
     })
     .returning()
 
+  console.log('[Tag Creation] Insert result:', insertedTags)
+  
+  const tag = insertedTags[0]
+
   if (!tag) {
+    console.error('[Tag Creation] No tag returned after insert')
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to create tag',
     })
   }
+  
+  console.log('[Tag Creation] Tag created successfully:', tag)
   
   return {
     success: true,

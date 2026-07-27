@@ -14,7 +14,8 @@
     "db:indexes": "node scripts/apply-performance-indexes.mjs",
     "db:check-audit": "node scripts/check-audit-logs-table.mjs",
     "db:optimize": "node scripts/apply-indexes.mjs",
-    "test:qr": "node scripts/test-qr-tracking.mjs"
+    "test:qr": "node scripts/test-qr-tracking.mjs",
+    "test:tags": "node scripts/test-tag-creation.mjs"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.101",
