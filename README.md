@@ -330,6 +330,7 @@ netlify deploy --prod
 - `DATABASE_URL` - Use Neon pooled connection (`-pooler` suffix)
 - `NUXT_SITE_TOKEN` - Your secure token
 - `NUXT_SITE_USER` - Admin username (default: root)
+- `NUXT_PUBLIC_SITE_URL` - your domain where the script is hosted
 
 #### Vercel
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pritush/syano)
