@@ -78,6 +78,11 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
 
   const query = getQuery(event)
 
+  // Log query params for debugging (remove in production if needed)
+  if (query.r) {
+    console.log('[QR Tracking] Query param r detected:', query.r, 'for slug:', link.slug)
+  }
+
   // Record standard access log
   await db.insert(access_logs).values({
     link_id: link.id,
@@ -106,10 +111,17 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
   })
 
   // Track QR scans separately if parameter is present
-  if (query.r === 'qr') {
-    await db.insert(qr_scans).values({
-      link_id: link.id,
-      slug: link.slug,
-    })
+  const rParam = String(query.r || '').toLowerCase()
+  if (rParam === 'qr') {
+    console.log('[QR Tracking] Inserting QR scan for link_id:', link.id, 'slug:', link.slug)
+    try {
+      await db.insert(qr_scans).values({
+        link_id: link.id,
+        slug: link.slug,
+      })
+      console.log('[QR Tracking] QR scan recorded successfully')
+    } catch (error) {
+      console.error('[QR Tracking] Failed to record QR scan:', error)
+    }
   }
 }
