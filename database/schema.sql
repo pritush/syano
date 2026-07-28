@@ -10,7 +10,7 @@ BEGIN;
 -- Tags table for organizing links
 CREATE TABLE IF NOT EXISTS tags (
     id VARCHAR(64) PRIMARY KEY NOT NULL,
-    name VARCHAR(120) NOT NULL,
+    name VARCHAR(120) NOT NULL UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

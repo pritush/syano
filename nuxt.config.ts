@@ -21,6 +21,41 @@ export default defineNuxtConfig({
     build: {
       sourcemap: false, // Disable sourcemaps in production to avoid warnings
     },
+    css: {
+      devSourcemap: false,
+    },
+    plugins: [
+      // Workaround for @tailwindcss/vite + Vite/Rollup "Sourcemap is likely
+      // to be incorrect" warning (https://github.com/tailwindlabs/tailwindcss/issues/19930).
+      // The Tailwind Vite plugin transforms CSS without producing sourcemaps.
+      // Rollup then flags the resulting bundle as "Sourcemap is likely to be
+      // incorrect" and emits noisy warnings. We hook `transform` with
+      // `enforce: 'post'` so we run after the Tailwind plugin and attach a
+      // valid identity sourcemap to each transformed CSS module, which
+      // satisfies Rollup's sourcemap check.
+      {
+        name: 'syano-suppress-tailwind-sourcemap-warning',
+        enforce: 'post',
+        transform(code, id) {
+          if (!id.endsWith('.css')) {
+            return null
+          }
+          const sourceLines = code.split('\n').length
+          const semicolon = ';'.repeat(Math.max(0, sourceLines - 1))
+          return {
+            code,
+            map: {
+              version: 3,
+              file: id,
+              sources: [id],
+              sourcesContent: [code],
+              names: [],
+              mappings: `AAAA${semicolon}`,
+            } as any,
+          }
+        },
+      },
+    ],
   },
   
   // Performance optimizations

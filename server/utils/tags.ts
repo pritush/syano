@@ -30,6 +30,17 @@ export async function listTags(event: H3Event) {
 export async function createTag(event: H3Event, name: string) {
   const db = await useDrizzle(event)
 
+  // Check for duplicate tag name
+  const [existing] = await db
+    .select()
+    .from(tags)
+    .where(eq(tags.name, name))
+    .limit(1)
+
+  if (existing) {
+    throw new Error(`Tag '${name}' already exists`)
+  }
+
   const [tag] = await db
     .insert(tags)
     .values({
@@ -37,6 +48,10 @@ export async function createTag(event: H3Event, name: string) {
       name,
     })
     .returning()
+
+  if (!tag) {
+    throw new Error('Failed to insert tag')
+  }
 
   // Invalidate cache
   invalidateTagsCache()

@@ -25,6 +25,9 @@ const tags = ref<TagItem[]>([])
 const loadingTags = ref(true)
 const creatingTag = ref(false)
 const tagName = ref('')
+const editingTagId = ref<string | null>(null)
+const editingTagName = ref('')
+const savingTagId = ref<string | null>(null)
 const statusMessage = ref('')
 const errorMessage = ref('')
 const deleteModalOpen = ref(false)
@@ -51,7 +54,8 @@ async function loadTags() {
 }
 
 async function createTag() {
-  if (!tagName.value.trim()) {
+  const name = tagName.value.trim()
+  if (!name) {
     return
   }
 
@@ -60,16 +64,71 @@ async function createTag() {
   errorMessage.value = ''
 
   try {
-    await api.createTag({ name: tagName.value.trim() })
+    const response = await api.createTag({ name })
 
     tagName.value = ''
-    await loadTags()
+    tags.value = [
+      {
+        id: response.data.id,
+        name: response.data.name,
+        link_count: 0,
+      },
+      ...tags.value.filter(tag => tag.id !== response.data.id),
+    ]
     toasts.created('tag', 'Tag')
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || 'Unable to create tag.'
     toasts.error('Creation failed', error?.data?.statusMessage || 'Unable to create tag.')
   } finally {
     creatingTag.value = false
+  }
+}
+
+function startEditTag(tag: TagItem) {
+  editingTagId.value = tag.id
+  editingTagName.value = tag.name
+  statusMessage.value = ''
+  errorMessage.value = ''
+}
+
+function cancelEditTag() {
+  if (savingTagId.value) {
+    return
+  }
+
+  editingTagId.value = null
+  editingTagName.value = ''
+}
+
+async function saveTag(tag: TagItem) {
+  const name = editingTagName.value.trim()
+  if (!name) {
+    errorMessage.value = 'Tag name is required.'
+    return
+  }
+
+  if (name === tag.name) {
+    cancelEditTag()
+    return
+  }
+
+  savingTagId.value = tag.id
+  statusMessage.value = ''
+  errorMessage.value = ''
+
+  try {
+    const response = await api.updateTag(tag.id, { name })
+    tags.value = tags.value.map(item => item.id === tag.id
+      ? { ...item, name: response.data.name }
+      : item)
+    editingTagId.value = null
+    editingTagName.value = ''
+    toasts.saved(`Tag "${response.data.name}"`)
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || error?.data?.statusMessage || 'Unable to update tag.'
+    toasts.error('Update failed', error?.data?.message || error?.data?.statusMessage || 'Unable to update tag.')
+  } finally {
+    savingTagId.value = null
   }
 }
 
@@ -180,12 +239,21 @@ onMounted(loadTags)
             :key="tag.id"
             class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-slate-300 dark:border-slate-700/50 dark:bg-slate-800/20 dark:hover:border-slate-600"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex min-w-0 items-center gap-3">
               <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">
                 <UIcon name="lucide:tag" class="h-5 w-5" />
               </div>
-              <div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">
+              <div class="min-w-0">
+                <div v-if="editingTagId === tag.id" class="space-y-2">
+                  <UInput
+                    v-model="editingTagName"
+                    size="sm"
+                    :disabled="savingTagId === tag.id"
+                    @keydown.enter.prevent="saveTag(tag)"
+                    @keydown.esc.prevent="cancelEditTag"
+                  />
+                </div>
+                <p v-else class="truncate font-medium text-slate-900 dark:text-slate-100">
                   {{ tag.name }}
                 </p>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
@@ -194,16 +262,47 @@ onMounted(loadTags)
               </div>
             </div>
             
-            <UButton
-              v-if="can('tags:manage')"
-              color="error"
-              variant="soft"
-              size="sm"
-              icon="lucide:trash-2"
-              @click="requestDeleteTag(tag)"
-            >
-              Delete
-            </UButton>
+            <div v-if="can('tags:manage')" class="flex shrink-0 items-center gap-2">
+              <template v-if="editingTagId === tag.id">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="savingTagId === tag.id"
+                  @click="cancelEditTag"
+                >
+                  Cancel
+                </UButton>
+                <UButton
+                  color="primary"
+                  size="sm"
+                  :loading="savingTagId === tag.id"
+                  @click="saveTag(tag)"
+                >
+                  Save
+                </UButton>
+              </template>
+              <template v-else>
+                <UButton
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                  icon="lucide:pencil"
+                  @click="startEditTag(tag)"
+                >
+                  Edit
+                </UButton>
+                <UButton
+                  color="error"
+                  variant="soft"
+                  size="sm"
+                  icon="lucide:trash-2"
+                  @click="requestDeleteTag(tag)"
+                >
+                  Delete
+                </UButton>
+              </template>
+            </div>
           </div>
         </div>
 

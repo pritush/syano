@@ -1,15 +1,9 @@
 import { defineEventHandler, readBody, createError } from 'h3'
-import { eq } from 'drizzle-orm'
-import crypto from 'node:crypto'
-import { useDrizzle } from '~/server/utils/db'
-import { tags } from '~/server/database/schema'
 import { requireUnifiedAuth, requireUnifiedPermission } from '~/server/utils/unified-auth'
 import { checkRateLimit } from '~/server/utils/rate-limit'
-import { z } from 'zod'
-
-const createTagSchema = z.object({
-  name: z.string().min(1).max(64),
-})
+import { createTagSchema } from '~/shared/schemas/tag'
+import { createTag } from '~/server/utils/tags'
+import { recordAudit } from '~/server/utils/audit-log'
 
 /**
  * Create a new tag
@@ -55,60 +49,55 @@ export default defineEventHandler(async (event) => {
   const data = validation.data
   console.log('[Tag Creation] Validated data:', data)
   
-  const db = await useDrizzle(event)
-  console.log('[Tag Creation] Database connection acquired')
-  
-  // Check if tag name already exists
-  const [existing] = await db
-    .select()
-    .from(tags)
-    .where(eq(tags.name, data.name))
-    .limit(1)
-  
-  if (existing) {
-    console.log('[Tag Creation] Tag already exists:', existing.name)
-    throw createError({
-      statusCode: 409,
-      statusMessage: 'Conflict',
-      message: `Tag '${data.name}' already exists`,
+  // Use the utility function which handles cache invalidation
+  try {
+    console.log('[Tag Creation] Calling createTag utility...')
+    const tag = await createTag(event, data.name)
+    
+    if (!tag) {
+      console.error('[Tag Creation] No tag returned from createTag utility')
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to create tag',
+      })
+    }
+    
+    console.log('[Tag Creation] Tag created successfully:', tag)
+    
+    // Record audit log
+    await recordAudit(event, {
+      user_id: auth.userId,
+      action: 'tag.create',
+      resource_type: 'tag',
+      resource_id: tag.id,
+      details: { name: tag.name },
     })
-  }
-  
-  console.log('[Tag Creation] Tag name is unique, inserting...')
-  
-  // Create tag
-  const tagId = crypto.randomUUID()
-  console.log('[Tag Creation] Generated tag ID:', tagId)
-  
-  const insertedTags = await db
-    .insert(tags)
-    .values({
-      id: tagId,
-      name: data.name,
-    })
-    .returning()
-
-  console.log('[Tag Creation] Insert result:', insertedTags)
-  
-  const tag = insertedTags[0]
-
-  if (!tag) {
-    console.error('[Tag Creation] No tag returned after insert')
+    
+    return {
+      success: true,
+      data: {
+        id: tag.id,
+        name: tag.name,
+        color: '#3B82F6',
+        created_at: tag.created_at,
+      },
+    }
+  } catch (error: any) {
+    console.error('[Tag Creation] Error:', error)
+    
+    // Check for duplicate error (PostgreSQL unique constraint violation)
+    if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Conflict',
+        message: `Tag '${data.name}' already exists`,
+      })
+    }
+    
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to create tag',
+      message: error.message || 'Unknown error',
     })
-  }
-  
-  console.log('[Tag Creation] Tag created successfully:', tag)
-  
-  return {
-    success: true,
-    data: {
-      id: tag.id,
-      name: tag.name,
-      color: '#3B82F6',
-      created_at: tag.created_at,
-    },
   }
 })

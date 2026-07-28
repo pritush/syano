@@ -378,6 +378,65 @@ async function ensureLinksSenderIdForeignKey(db: DbExecutor, warnings: string[])
 }
 
 /**
+ * Ensure tags.name has unique constraint
+ */
+async function hasTagsNameUniqueConstraint(db: DbExecutor): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE contype = 'u'
+        AND conrelid = 'public.tags'::regclass
+        AND conkey = ARRAY[
+          (
+            SELECT attnum
+            FROM pg_attribute
+            WHERE attrelid = 'public.tags'::regclass
+              AND attname = 'name'
+              AND NOT attisdropped
+          )
+        ]
+    ) AS exists
+  `)
+  return Boolean(result.rows[0]?.exists)
+}
+
+async function ensureTagsNameUniqueConstraint(db: DbExecutor, warnings: string[]) {
+  if (await hasTagsNameUniqueConstraint(db)) {
+    return
+  }
+
+  try {
+    // First remove duplicates (keep oldest)
+    await db.execute(sql.raw(`
+      DELETE FROM tags
+      WHERE id IN (
+        SELECT id
+        FROM (
+          SELECT 
+            id,
+            name,
+            ROW_NUMBER() OVER (PARTITION BY name ORDER BY created_at ASC) as rn
+          FROM tags
+        ) t
+        WHERE rn > 1
+      )
+    `))
+
+    // Add unique constraint
+    await db.execute(sql.raw(`
+      ALTER TABLE tags ADD CONSTRAINT tags_name_unique UNIQUE (name)
+    `))
+  } catch (err: any) {
+    // Check if constraint was added despite error
+    if (await hasTagsNameUniqueConstraint(db)) {
+      return
+    }
+    warnings.push(`tags.name unique constraint: ${err.message || 'Unknown error'}`)
+  }
+}
+
+/**
  * Single unified function that applies the full schema.
  * Safe for both empty databases and existing databases with partial schema.
  *
@@ -393,7 +452,7 @@ async function applySchema(db: DbExecutor, warnings: string[]) {
   await executeStatement(db, `
     CREATE TABLE IF NOT EXISTS tags (
       id varchar(64) PRIMARY KEY NOT NULL,
-      name varchar(120) NOT NULL,
+      name varchar(120) NOT NULL UNIQUE,
       created_at timestamp with time zone DEFAULT now()
     )
   `, warnings, 'tags table', { critical: true })
@@ -754,6 +813,7 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
   // repair outside the core transaction so the usable schema is retained and
   // the administrator receives a precise warning to resolve the bad rows.
   await ensureLinksSenderIdForeignKey(db, warnings)
+  await ensureTagsNameUniqueConstraint(db, warnings)
 
   await runIndexes(db, warnings)
 

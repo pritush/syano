@@ -38,13 +38,14 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const search = ((query.search as string) || '').trim().toLowerCase()
   const results = await listTagsWithCounts(event)
+  type TagWithCount = (typeof results)[number]
   const filtered = search
-    ? results.filter((tag) => tag.name.toLowerCase().includes(search))
+    ? results.filter((tag: TagWithCount) => tag.name.toLowerCase().includes(search))
     : results
   
   return {
     success: true,
-    data: filtered.map((tag) => ({
+    data: filtered.map((tag: TagWithCount) => ({
       ...tag,
       color: '#3B82F6',
     })),

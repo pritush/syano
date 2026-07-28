@@ -2,7 +2,7 @@ import { bigint, boolean, doublePrecision, inet, jsonb, pgTable, text, timestamp
 
 export const tags = pgTable('tags', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
-  name: varchar('name', { length: 120 }).notNull(),
+  name: varchar('name', { length: 120 }).notNull().unique(),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
 

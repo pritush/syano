@@ -227,6 +227,24 @@ export function useDashboardApi() {
   }
 
   /**
+   * V1 API Helper: Update a tag
+   */
+  async function updateTag(id: string, data: { name: string }) {
+    return request<{
+      success: boolean
+      data: {
+        id: string
+        name: string
+        color: string
+        created_at: string
+      }
+    }>(`/api/v1/tags/${id}`, {
+      method: 'PATCH',
+      body: data,
+    })
+  }
+
+  /**
    * V1 API Helper: Delete a tag
    */
   async function deleteTag(id: string) {
@@ -523,6 +541,7 @@ export function useDashboardApi() {
     deleteLink,
     listTags,
     createTag,
+    updateTag,
     deleteTag,
     getAnalytics,
     exportLinks,
