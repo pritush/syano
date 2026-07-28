@@ -19,11 +19,18 @@ export default defineNuxtConfig({
   // Vite configuration
   vite: {
     build: {
-      sourcemap: false, // Disable sourcemaps in production to avoid warnings
+      sourcemap: process.env.NODE_ENV === 'development', // Only in dev mode
+      rollupOptions: {
+        output: {
+          // Suppress sourcemap warnings for Nuxt plugins
+          sourcemapExcludeSources: true,
+        },
+      },
     },
     css: {
       devSourcemap: false,
     },
+    logLevel: 'warn', // Reduce verbose logging
     plugins: [
       // Workaround for @tailwindcss/vite + Vite/Rollup "Sourcemap is likely
       // to be incorrect" warning (https://github.com/tailwindlabs/tailwindcss/issues/19930).
@@ -172,5 +179,22 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
     typeCheck: false,
+  },
+  
+  // Suppress Vite sourcemap warnings
+  hooks: {
+    'vite:extendConfig': (config) => {
+      if (config.build?.rollupOptions?.onwarn) return
+      if (!config.build) config.build = {}
+      if (!config.build.rollupOptions) config.build.rollupOptions = {}
+      
+      config.build.rollupOptions.onwarn = (warning, warn) => {
+        // Suppress sourcemap warnings from Nuxt plugins
+        if (warning.code === 'SOURCEMAP_ERROR' && warning.message?.includes('nuxt:')) {
+          return
+        }
+        warn(warning)
+      }
+    },
   },
 })
