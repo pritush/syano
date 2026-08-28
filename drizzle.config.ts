@@ -1,4 +1,5 @@
 import { defineConfig } from 'drizzle-kit'
+import { shouldUseSSL } from './shared/utils/ssl'
 
 // Read environment from NODE_ENV or default to development
 const environment = process.env.NODE_ENV || 'development'
@@ -6,33 +7,6 @@ const environment = process.env.NODE_ENV || 'development'
 // Determine database URL based on environment
 const databaseUrl = process.env.NUXT_DATABASE_URL || process.env.DATABASE_URL || ''
 
-// Auto-detect if SSL should be enabled
-function shouldUseSSL(connectionString: string): boolean {
-  if (!connectionString) return false
-  
-  // Check for explicit sslmode in connection string
-  if (connectionString.includes('sslmode=require') || connectionString.includes('sslmode=verify-')) {
-    return true
-  }
-
-  if (connectionString.includes('sslmode=disable') || connectionString.includes('sslmode=prefer')) {
-    return false
-  }
-
-  // Auto-detect cloud providers that require SSL
-  const cloudProviders = [
-    'supabase.co',
-    'neon.tech',
-    'aivencloud.com',
-    'aws.com',
-    'azure.com',
-    'digitalocean.com',
-    'heroku.com',
-    'railway.app',
-  ]
-
-  return cloudProviders.some(provider => connectionString.includes(provider))
-}
 
 // Build database credentials with SSL support
 const dbCredentials: any = {

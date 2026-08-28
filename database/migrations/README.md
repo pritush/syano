@@ -27,14 +27,6 @@ Or using the connection string:
 psql "postgresql://user:password@localhost:5432/dbname" -f database/migrations/complete_schema_upgrade.sql
 ```
 
-### Option 3: Individual Migration
-
-To add only the `key_encrypted` column:
-
-```bash
-psql "your_connection_string" -f database/migrations/add_key_encrypted_column.sql
-```
-
 ## Migration Files
 
 ### `complete_schema_upgrade.sql`
@@ -46,24 +38,11 @@ psql "your_connection_string" -f database/migrations/add_key_encrypted_column.sq
 - API keys with encryption support
 - Webhooks
 - Rate limiting
+- Performance indexes
 
 It is safe to run multiple times and wraps the schema changes in a transaction.
 Use `database/schema.sql` directly when pasting SQL into a cloud provider's SQL
 console; the wrapper uses psql's relative-include command.
-
-### `add_key_encrypted_column.sql`
-Adds only the `key_encrypted` column to the `api_keys` table.
-
-**Use this if:**
-- You already have the api_keys table
-- You only need to add the encryption feature
-- You want a minimal migration
-
-## What Gets Added
-
-### For API Key Reveal Feature
-
-The key change for the API key reveal feature:
 
 ```sql
 ALTER TABLE api_keys 

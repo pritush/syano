@@ -1,7 +1,7 @@
 import { defineEventHandler, getQuery, createError, getRequestURL } from 'h3'
 import { requireUnifiedAuth, requireUnifiedPermission } from '~/server/utils/unified-auth'
 import { checkRateLimit } from '~/server/utils/rate-limit'
-import { listLinks as listStoredLinks } from '~/server/utils/link-store'
+import { listLinks as listStoredLinks, searchLinks as searchStoredLinks } from '~/server/utils/link-store'
 
 defineRouteMeta({
   openAPI: {
@@ -251,23 +251,49 @@ export default defineEventHandler(async (event) => {
   const offset = Math.max(Number(query.offset) || 0, 0)
   const search = (query.search as string) || ''
   const tag_id = (query.tag_id as string) || ''
-  
+  const normalizedSearch = search.trim().toLowerCase()
+
+  // When searching, delegate to the database-level search for efficiency
+  if (normalizedSearch) {
+    const searchResults = await searchStoredLinks(event, normalizedSearch, limit + offset + 1)
+    const sliced = searchResults.slice(offset, offset + limit)
+    const count = searchResults.length
+
+    return {
+      success: true,
+      data: sliced.map((link) => ({
+        id: undefined, // search returns limited columns
+        slug: link.slug,
+        url: link.url,
+        short_url: `${getRequestURL(event).origin}/${link.slug}`,
+        title: undefined,
+        description: undefined,
+        comment: link.comment,
+        tag_id: undefined,
+        expiration: undefined,
+        cloaking: undefined,
+        redirect_with_query: undefined,
+        created_at: undefined,
+        updated_at: undefined,
+        click_count: undefined,
+      })),
+      pagination: {
+        limit,
+        offset,
+        total: count,
+        has_more: offset + limit < count,
+      },
+    }
+  }
+
+  // Non-search: use standard listing with DB-level pagination
   const { items } = await listStoredLinks(event, {
-    limit: Math.min(limit + offset, 1000),
+    limit: limit + offset,
     tag_id: tag_id || undefined,
   })
 
-  const normalizedSearch = search.trim().toLowerCase()
-  const filtered = normalizedSearch
-    ? items.filter((link) =>
-        [link.slug, link.url, link.title, link.comment]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
-      )
-    : items
-
-  const results = filtered.slice(offset, offset + limit)
-  const count = filtered.length
+  const results = items.slice(offset, offset + limit)
+  const count = items.length
   
   return {
     success: true,

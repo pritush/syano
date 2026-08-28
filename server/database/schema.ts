@@ -1,4 +1,4 @@
-import { bigint, boolean, doublePrecision, inet, jsonb, pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core'
+import { bigint, boolean, doublePrecision, inet, integer, jsonb, pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core'
 
 export const tags = pgTable('tags', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
@@ -32,6 +32,7 @@ export const links = pgTable('links', {
   redirect_with_query: boolean('redirect_with_query').default(false),
   password: text('password'),
   unsafe: boolean('unsafe').default(false),
+  click_count: integer('click_count').default(0).notNull(),
   tag_id: varchar('tag_id', { length: 64 }).references(() => tags.id, { onDelete: 'set null' }),
   sender_id: uuid('sender_id').references(() => sender_ids.id, { onDelete: 'set null' }),
 })
@@ -117,6 +118,31 @@ export const api_keys = pgTable('api_keys', {
   is_active: boolean('is_active').default(true),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})
+
+export const webhooks = pgTable('webhooks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  user_id: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 128 }).notNull(),
+  url: text('url').notNull(),
+  events: text('events').array().notNull().default([]),
+  secret: text('secret').notNull(),
+  is_active: boolean('is_active').default(true),
+  failure_count: bigint('failure_count', { mode: 'number' }).default(0),
+  last_triggered_at: timestamp('last_triggered_at', { withTimezone: true, mode: 'date' }),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
+})
+
+export const webhook_deliveries = pgTable('webhook_deliveries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  webhook_id: uuid('webhook_id').references(() => webhooks.id, { onDelete: 'cascade' }),
+  event_type: varchar('event_type', { length: 64 }).notNull(),
+  payload: jsonb('payload').notNull(),
+  response_status: bigint('response_status', { mode: 'number' }),
+  response_body: text('response_body'),
+  error: text('error'),
+  delivered_at: timestamp('delivered_at', { withTimezone: true, mode: 'date' }).defaultNow(),
 })
 
 export const api_rate_limits = pgTable('api_rate_limits', {

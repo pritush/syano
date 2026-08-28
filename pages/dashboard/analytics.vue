@@ -79,8 +79,8 @@ const api = useDashboardApi()
 import { subDays, format } from 'date-fns'
 
 const dateRange = ref<{ start: Date; end: Date } | null>({
-  start: subDays(new Date(), 30),
-  end: new Date()
+  start: new Date('2020-01-01'),
+  end: new Date(),
 })
 const slug = ref(typeof route.query.slug === 'string' ? route.query.slug : '')
 const selectedTagId = ref('')
@@ -247,7 +247,7 @@ async function loadAnalytics() {
 
   try {
     const query = queryParams()
-    const [counterData, viewData, metricData, heatmapData, eventData, locationData, qrData] = await Promise.all([
+    const results = await Promise.allSettled([
       api.getAnalyticsCounters(query),
       api.getAnalyticsViews(query),
       api.getAnalyticsMetrics(query),
@@ -257,13 +257,22 @@ async function loadAnalytics() {
       api.getQrScans(query),
     ])
 
-    counters.value = counterData.data
-    views.value = viewData.data
-    metrics.value = metricData.data
-    heatmap.value = heatmapData.data
-    events.value = eventData.data
-    locations.value = locationData.data
-    qrScans.value = qrData.data.qr_scans
+    const [counterResult, viewResult, metricResult, heatmapResult, eventResult, locationResult, qrResult] = results
+
+    if (counterResult.status === 'fulfilled') counters.value = counterResult.value.data
+    if (viewResult.status === 'fulfilled') views.value = viewResult.value.data
+    if (metricResult.status === 'fulfilled') metrics.value = metricResult.value.data
+    if (heatmapResult.status === 'fulfilled') heatmap.value = heatmapResult.value.data
+    if (eventResult.status === 'fulfilled') events.value = eventResult.value.data
+    if (locationResult.status === 'fulfilled') locations.value = locationResult.value.data
+    if (qrResult.status === 'fulfilled') qrScans.value = qrResult.value.data.qr_scans
+
+    // Show error only if all requests failed
+    const failures = results.filter(r => r.status === 'rejected')
+    if (failures.length === results.length) {
+      const firstError = (failures[0] as PromiseRejectedResult).reason
+      errorMessage.value = firstError?.data?.statusMessage || firstError?.data?.message || 'Unable to load analytics.'
+    }
   } catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to load analytics.'
   } finally {
@@ -271,7 +280,11 @@ async function loadAnalytics() {
   }
 }
 
-watch([dateRange, selectedTagId], () => {
+watch(dateRange, () => {
+  loadAnalytics()
+}, { deep: true })
+
+watch(selectedTagId, () => {
   loadAnalytics()
 })
 
@@ -285,6 +298,10 @@ watch(
     slug.value = typeof value === 'string' ? value : ''
   },
 )
+
+function openQrModal() {
+  qrModalOpen.value = true
+}
 
 onMounted(async () => {
   await loadTags()
@@ -311,7 +328,7 @@ onMounted(async () => {
               color="neutral"
               variant="soft"
               title="View QR Code"
-              @click="qrModalOpen = true"
+              @click="openQrModal"
             >
               <UIcon name="lucide:qr-code" class="h-4 w-4" />
               QR Code

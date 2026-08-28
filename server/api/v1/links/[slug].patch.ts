@@ -1,19 +1,32 @@
 import { defineEventHandler, getRouterParam, readBody, createError, getRequestURL } from 'h3'
+import { useRuntimeConfig } from '#imports'
 import { eq } from 'drizzle-orm'
 import { useDrizzle } from '~/server/utils/db'
 import { links } from '~/server/database/schema'
 import { requireUnifiedAuth, requireUnifiedPermission } from '~/server/utils/unified-auth'
 import { checkRateLimit } from '~/server/utils/rate-limit'
+import { invalidateLinkCache } from '~/server/utils/cache'
 import { z } from 'zod'
 
 const updateLinkSchema = z.object({
   url: z.string().url('Invalid URL format').optional(),
   title: z.string().max(256).optional(),
   description: z.string().max(1000).optional(),
-  comment: z.string().max(1000).optional(),
-  tag_id: z.string().max(64).nullable().optional(),
-  expiration: z.number().int().positive().nullable().optional(),
-  password: z.string().min(4).max(128).nullable().optional(),
+  comment: z.string().max(1000).optional().nullable().transform(val => val === '' ? null : val),
+  tag_id: z.union([
+    z.string().max(64),
+    z.null(),
+    z.literal('')
+  ]).optional().transform(val => val === '' ? null : val),
+  expiration: z.union([
+    z.number().int().positive(),
+    z.null()
+  ]).optional(),
+  password: z.union([
+    z.string().min(4).max(128),
+    z.null(),
+    z.literal('')
+  ]).optional().transform(val => val === '' ? null : val),
   cloaking: z.boolean().optional(),
   redirect_with_query: z.boolean().optional(),
 })
@@ -48,9 +61,11 @@ export default defineEventHandler(async (event) => {
   }
   
   const body = await readBody(event)
+  
   const validation = updateLinkSchema.safeParse(body)
   
   if (!validation.success) {
+    console.error('[Link Update] Validation failed:', validation.error.errors)
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
@@ -92,6 +107,9 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Failed to update link',
     })
   }
+
+  // Invalidate cache so subsequent reads reflect the update immediately
+  invalidateLinkCache(slug, useRuntimeConfig(event).caseSensitive)
   
   return {
     success: true,

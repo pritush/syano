@@ -2,7 +2,8 @@ import type { H3Event } from 'h3'
 import { getHeader, getRequestIP, getQuery } from 'h3'
 import geoip from 'geoip-lite'
 import { UAParser } from 'ua-parser-js'
-import { access_logs, qr_scans } from '~/server/database/schema'
+import { sql, eq } from 'drizzle-orm'
+import { access_logs, links, qr_scans } from '~/server/database/schema'
 import type { StoredLink } from '~/server/utils/link-store'
 import { useDrizzle } from '~/server/utils/db'
 
@@ -61,8 +62,7 @@ function formatDevice(device: ReturnType<UAParser['getDevice']>, deviceType: str
   return deviceType
 }
 
-export async function useAccessLog(event: H3Event, link: StoredLink) {
-  const db = await useDrizzle(event)
+export function useAccessLog(event: H3Event, link: StoredLink) {
   const ua = getHeader(event, 'user-agent') || ''
 
   if (isBot(ua)) {
@@ -74,14 +74,24 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
   const ip = normalizeIp(getRequestIP(event, { xForwardedFor: true }) || null)
   const geo = ip ? geoip.lookup(ip) : null
   const deviceType = result.device.type || 'desktop'
-  const [latitude, longitude] = geo?.ll || [null, null]
 
   const query = getQuery(event)
 
-  // Log query params for debugging (remove in production if needed)
-  if (query.r) {
-    console.log('[QR Tracking] Query param r detected:', query.r, 'for slug:', link.slug)
-  }
+  // Fire-and-forget: don't block the redirect response
+  _writeAccessLog(event, link, ua, result, geo, deviceType, query)
+    .catch(err => console.error('[AccessLog] Failed to write access log:', err))
+}
+
+async function _writeAccessLog(
+  event: H3Event,
+  link: StoredLink,
+  ua: string,
+  result: ReturnType<UAParser['getResult']>,
+  geo: ReturnType<typeof geoip.lookup>,
+  deviceType: string,
+  query: ReturnType<typeof getQuery>,
+) {
+  const db = await useDrizzle(event)
 
   // Record standard access log
   await db.insert(access_logs).values({
@@ -110,16 +120,19 @@ export async function useAccessLog(event: H3Event, link: StoredLink) {
     utm_content: typeof query.utm_content === 'string' ? query.utm_content : null,
   })
 
+  // Atomically increment the denormalized click_count on the links table
+  await db.update(links)
+    .set({ click_count: sql`${links.click_count} + 1` })
+    .where(eq(links.id, link.id))
+
   // Track QR scans separately if parameter is present
   const rParam = String(query.r || '').toLowerCase()
   if (rParam === 'qr') {
-    console.log('[QR Tracking] Inserting QR scan for link_id:', link.id, 'slug:', link.slug)
     try {
       await db.insert(qr_scans).values({
         link_id: link.id,
         slug: link.slug,
       })
-      console.log('[QR Tracking] QR scan recorded successfully')
     } catch (error) {
       console.error('[QR Tracking] Failed to record QR scan:', error)
     }

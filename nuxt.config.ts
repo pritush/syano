@@ -24,6 +24,11 @@ export default defineNuxtConfig({
         output: {
           // Suppress sourcemap warnings for Nuxt plugins
           sourcemapExcludeSources: true,
+          // Manual chunking for better code splitting
+          manualChunks: {
+            'd3': ['d3-geo'],
+            'topojson': ['topojson-client'],
+          },
         },
       },
     },
@@ -31,6 +36,10 @@ export default defineNuxtConfig({
       devSourcemap: false,
     },
     logLevel: 'warn', // Reduce verbose logging
+    // Optimize dependencies
+    optimizeDeps: {
+      include: ['d3-geo', 'topojson-client'],
+    },
     plugins: [
       // Workaround for @tailwindcss/vite + Vite/Rollup "Sourcemap is likely
       // to be incorrect" warning (https://github.com/tailwindlabs/tailwindcss/issues/19930).

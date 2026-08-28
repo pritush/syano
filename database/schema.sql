@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS links (
     redirect_with_query BOOLEAN DEFAULT FALSE,
     password TEXT,
     unsafe BOOLEAN DEFAULT FALSE,
+    click_count INTEGER NOT NULL DEFAULT 0,
     tag_id VARCHAR(64) REFERENCES tags(id) ON DELETE SET NULL,
     sender_id UUID REFERENCES sender_ids(id) ON DELETE SET NULL
 );
@@ -193,7 +194,8 @@ ALTER TABLE sender_ids
     ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE links
-    ADD COLUMN IF NOT EXISTS sender_id UUID;
+    ADD COLUMN IF NOT EXISTS sender_id UUID,
+    ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0;
 
 DO $$
 BEGIN

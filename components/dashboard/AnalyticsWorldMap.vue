@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import * as d3 from 'd3-geo'
-import * as topojson from 'topojson-client'
+// Only import on client side to avoid SSR issues
+let d3: any = null
+let topojson: any = null
+
+if (process.client) {
+  d3 = await import('d3-geo')
+  topojson = await import('topojson-client')
+}
 
 const props = defineProps<{
   items: Array<{

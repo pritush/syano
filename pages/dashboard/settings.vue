@@ -286,13 +286,10 @@ async function removeSocial(index: number) {
 }
 
 function closeDeleteModal() {
-  if (saving.value) {
-    return
-  }
-
   deleteModalOpen.value = false
   deleteTarget.value = null
 }
+
 
 async function confirmDeleteTarget() {
   const target = deleteTarget.value

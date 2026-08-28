@@ -141,10 +141,6 @@ function requestDeleteTag(tag: TagItem) {
 }
 
 function closeDeleteModal() {
-  if (deletingTagId.value) {
-    return
-  }
-
   deleteModalOpen.value = false
   pendingDeleteTag.value = null
 }

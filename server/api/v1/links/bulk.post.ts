@@ -6,6 +6,7 @@ import { buildShortLink, createLink, getLink } from '~/server/utils/link-store'
 import { createLinkSchema } from '~/shared/schemas/link'
 import { z } from 'zod'
 
+
 /**
  * Bulk create short links
  * POST /api/v1/links/bulk
@@ -45,22 +46,20 @@ export default defineEventHandler(async (event) => {
   
   const { links: linksToCreate } = validation.data
   
-  const results: Array<{ success: boolean; data?: any; error?: string }> = []
-  
-  // Process each link
-  for (const linkData of linksToCreate) {
-    try {
+  // Process all links concurrently for better throughput
+  const settled = await Promise.allSettled(
+    linksToCreate.map(async (linkData) => {
       if (linkData.slug && await getLink(event, linkData.slug)) {
-        results.push({
-          success: false,
-          error: `Slug '${linkData.slug}' is already in use`,
-        })
-        continue
+        throw new Error(`Slug '${linkData.slug}' is already in use`)
       }
-      
-      const link = await createLink(event, linkData)
-      
-      results.push({
+      return createLink(event, linkData)
+    })
+  )
+
+  const results = settled.map((result, i) => {
+    if (result.status === 'fulfilled') {
+      const link = result.value
+      return {
         success: true,
         data: {
           id: link.id,
@@ -77,14 +76,13 @@ export default defineEventHandler(async (event) => {
           created_at: link.created_at,
           updated_at: link.updated_at,
         },
-      })
-    } catch (error: any) {
-      results.push({
-        success: false,
-        error: error.message || 'Unknown error',
-      })
+      }
     }
-  }
+    return {
+      success: false,
+      error: result.reason?.message || 'Unknown error',
+    }
+  })
   
   const successCount = results.filter(r => r.success).length
   const failureCount = results.filter(r => !r.success).length

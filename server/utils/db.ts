@@ -5,6 +5,7 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { Pool, type PoolConfig } from 'pg'
 import { useRuntimeConfig } from '#imports'
 import * as schema from '~/server/database/schema'
+import { shouldUseSSL } from '~/shared/utils/ssl'
 
 type DrizzleDatabase = NodePgDatabase<typeof schema>
 
@@ -110,34 +111,6 @@ function validateConnectionString(connectionString: string): ConnectionValidatio
       details: error instanceof Error ? error.message : 'Unable to parse connection string',
     }
   }
-}
-
-/**
- * Auto-detects if SSL should be enabled based on connection string
- */
-function shouldUseSSL(connectionString: string): boolean {
-  // Check for explicit sslmode in connection string
-  if (connectionString.includes('sslmode=require') || connectionString.includes('sslmode=verify-')) {
-    return true
-  }
-
-  if (connectionString.includes('sslmode=disable') || connectionString.includes('sslmode=prefer')) {
-    return false
-  }
-
-  // Auto-detect cloud providers that require SSL
-  const cloudProviders = [
-    'supabase.co',
-    'neon.tech',
-    'aivencloud.com',
-    'aws.com',
-    'azure.com',
-    'digitalocean.com',
-    'heroku.com',
-    'railway.app',
-  ]
-
-  return cloudProviders.some(provider => connectionString.includes(provider))
 }
 
 /**

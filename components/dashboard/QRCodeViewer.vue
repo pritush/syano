@@ -19,19 +19,32 @@ const error = ref('')
 const downloading = ref(false)
 const svgContent = ref('')
 
+// In-memory cache to deliver instant zero-latency renders across modal opens
+const qrCache = new Map<string, string>()
+
 // Fetch SVG content when modal opens or slug changes
 async function fetchQR() {
-  if (!props.slug) return
+  const currentSlug = props.slug?.trim()
+  if (!currentSlug) return
+
+  // Check cache first for instant render
+  if (qrCache.has(currentSlug)) {
+    svgContent.value = qrCache.get(currentSlug)!
+    error.value = ''
+    loading.value = false
+    return
+  }
 
   loading.value = true
   error.value = ''
   svgContent.value = ''
 
   try {
-    const response = await $fetch<string>(`/api/qr/${props.slug}?format=svg`, {
+    const response = await $fetch<string>(`/api/qr/${encodeURIComponent(currentSlug)}?format=svg`, {
       responseType: 'text',
     })
     svgContent.value = response
+    qrCache.set(currentSlug, response)
   } catch (err) {
     console.error('QR fetch error:', err)
     error.value = 'Failed to load QR code'
@@ -40,16 +53,22 @@ async function fetchQR() {
   }
 }
 
-// Watch for open state changes to fetch QR
+// Watch for open state changes immediately and on any update
 watch(isOpen, (open) => {
   if (open && props.slug) {
     fetchQR()
   }
-})
+}, { immediate: true })
 
 // Watch slug changes while modal is open
 watch(() => props.slug, (newSlug) => {
   if (isOpen.value && newSlug) {
+    fetchQR()
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  if (isOpen.value && props.slug) {
     fetchQR()
   }
 })

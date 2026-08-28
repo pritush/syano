@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
-import { eq, and, gte, lt } from 'drizzle-orm'
+import { lt } from 'drizzle-orm'
 import { useDrizzle } from '~/server/utils/db'
 import { api_rate_limits } from '~/server/database/schema'
 import type { ApiKeyData } from '~/server/utils/api-auth'
@@ -40,8 +40,37 @@ function getRateLimitConfig(endpoint: string): RateLimitConfig {
   return RATE_LIMITS.default!
 }
 
+// ── In-memory sliding window rate limiter ──────────────────
+// Eliminates 2 DB roundtrips per API request compared to the old approach
+
+interface RateLimitWindow {
+  count: number
+  start: number
+}
+
+const globalStore = globalThis as typeof globalThis & {
+  __syanoRateLimitWindows?: Map<string, RateLimitWindow>
+  __syanoRateLimitCleanup?: NodeJS.Timeout
+}
+
+function getRateLimitStore(): Map<string, RateLimitWindow> {
+  if (!globalStore.__syanoRateLimitWindows) {
+    globalStore.__syanoRateLimitWindows = new Map()
+    // Clean up expired windows every 2 minutes
+    globalStore.__syanoRateLimitCleanup = setInterval(() => {
+      const now = Date.now()
+      for (const [key, window] of globalStore.__syanoRateLimitWindows!.entries()) {
+        if (now - window.start > 120000) { // 2 minutes stale
+          globalStore.__syanoRateLimitWindows!.delete(key)
+        }
+      }
+    }, 120000)
+  }
+  return globalStore.__syanoRateLimitWindows
+}
+
 /**
- * Check and enforce rate limit for API key
+ * Check and enforce rate limit for API key (in-memory, no DB queries)
  */
 export async function checkRateLimit(
   event: H3Event,
@@ -49,70 +78,44 @@ export async function checkRateLimit(
   endpoint: string
 ): Promise<void> {
   const config = getRateLimitConfig(endpoint)
-  const db = await useDrizzle(event)
-  
-  const windowStart = new Date(Date.now() - config.windowMs)
-  
-  // Get current rate limit record
-  const [rateLimitRecord] = await db
-    .select()
-    .from(api_rate_limits)
-    .where(
-      and(
-        eq(api_rate_limits.api_key_id, apiKey.id),
-        eq(api_rate_limits.endpoint, endpoint),
-        gte(api_rate_limits.window_start, windowStart)
-      )
-    )
-    .limit(1)
-  
-  if (rateLimitRecord) {
-    // Check if limit exceeded
-    const requestCount = rateLimitRecord.request_count ?? 0
-    const windowStart = rateLimitRecord.window_start ?? new Date()
+  const store = getRateLimitStore()
+  const key = `${apiKey.id}:${endpoint}`
+  const now = Date.now()
 
-    if (requestCount >= config.maxRequests) {
-      const resetTime = new Date(windowStart.getTime() + config.windowMs)
-      const retryAfter = Math.ceil((resetTime.getTime() - Date.now()) / 1000)
-      
-      // Log rate limit hit
-      apiLogger.logRateLimit(event, apiKey.key_prefix, endpoint)
-      apiMetrics.recordRateLimit(endpoint, apiKey.key_prefix)
-      
-      throw RateLimitErrors.rateLimitExceeded(retryAfter, config.maxRequests)
-    }
-    
-    // Increment counter
-    await db
-      .update(api_rate_limits)
-      .set({ request_count: requestCount + 1 })
-      .where(eq(api_rate_limits.id, rateLimitRecord.id))
-    
-    // Set rate limit headers
-    const remaining = config.maxRequests - requestCount - 1
-    const resetTime = new Date(windowStart.getTime() + config.windowMs)
-    
-    event.node.res.setHeader('X-RateLimit-Limit', config.maxRequests.toString())
-    event.node.res.setHeader('X-RateLimit-Remaining', remaining.toString())
-    event.node.res.setHeader('X-RateLimit-Reset', resetTime.toISOString())
-  } else {
-    // Create new rate limit record
-    await db.insert(api_rate_limits).values({
-      api_key_id: apiKey.id,
-      endpoint,
-      request_count: 1,
-      window_start: new Date(),
-    })
-    
-    // Set rate limit headers
-    event.node.res.setHeader('X-RateLimit-Limit', config.maxRequests.toString())
-    event.node.res.setHeader('X-RateLimit-Remaining', (config.maxRequests - 1).toString())
-    event.node.res.setHeader('X-RateLimit-Reset', new Date(Date.now() + config.windowMs).toISOString())
+  let window = store.get(key)
+
+  // Reset window if expired
+  if (!window || now - window.start >= config.windowMs) {
+    window = { count: 0, start: now }
+    store.set(key, window)
   }
+
+  // Check if limit exceeded
+  if (window.count >= config.maxRequests) {
+    const resetTime = new Date(window.start + config.windowMs)
+    const retryAfter = Math.ceil((resetTime.getTime() - now) / 1000)
+    
+    // Log rate limit hit
+    apiLogger.logRateLimit(event, apiKey.key_prefix, endpoint)
+    apiMetrics.recordRateLimit(endpoint, apiKey.key_prefix)
+    
+    throw RateLimitErrors.rateLimitExceeded(retryAfter, config.maxRequests)
+  }
+
+  // Increment counter
+  window.count++
+
+  // Set rate limit headers
+  const remaining = config.maxRequests - window.count
+  const resetTime = new Date(window.start + config.windowMs)
+  
+  event.node.res.setHeader('X-RateLimit-Limit', config.maxRequests.toString())
+  event.node.res.setHeader('X-RateLimit-Remaining', remaining.toString())
+  event.node.res.setHeader('X-RateLimit-Reset', resetTime.toISOString())
 }
 
 /**
- * Clean up old rate limit records (call periodically)
+ * Clean up old rate limit records from the DB (call periodically)
  */
 export async function cleanupRateLimits(event: H3Event): Promise<void> {
   const db = await useDrizzle(event)

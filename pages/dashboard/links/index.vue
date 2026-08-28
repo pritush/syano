@@ -258,10 +258,6 @@ function requestRemoveLink(slug: string) {
 }
 
 function closeDeleteModal() {
-  if (deletingSlug.value) {
-    return
-  }
-
   deleteModalOpen.value = false
   pendingDeleteSlug.value = null
 }

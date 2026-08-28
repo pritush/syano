@@ -67,6 +67,7 @@ const REQUIRED_COLUMNS: Array<MigrationItem & { table: string; column: string }>
   { id: 'key_encrypted', table: 'api_keys', column: 'key_encrypted', label: 'API key encryption column' },
   { id: 'sender_id', table: 'links', column: 'sender_id', label: 'Link sender ID column (TRAI SMS)' },
   { id: 'is_default', table: 'sender_ids', column: 'is_default', label: 'Default sender ID flag' },
+  { id: 'click_count', table: 'links', column: 'click_count', label: 'Denormalized click counter' },
 ]
 
 /**
@@ -495,6 +496,7 @@ async function applySchema(db: DbExecutor, warnings: string[]) {
       redirect_with_query boolean DEFAULT false,
       password text,
       unsafe boolean DEFAULT false,
+      click_count integer NOT NULL DEFAULT 0,
       tag_id varchar(64) REFERENCES tags(id) ON DELETE SET NULL,
       sender_id uuid REFERENCES sender_ids(id) ON DELETE SET NULL
     )
@@ -669,6 +671,34 @@ async function applySchema(db: DbExecutor, warnings: string[]) {
     'ALTER TABLE links ADD COLUMN IF NOT EXISTS sender_id uuid',
     warnings, 'links.sender_id', { critical: true },
   )
+  await executeStatement(db,
+    'ALTER TABLE links ADD COLUMN IF NOT EXISTS click_count integer NOT NULL DEFAULT 0',
+    warnings, 'links.click_count', { critical: true },
+  )
+
+  // Backfill click_count from access_logs for existing databases.
+  // Only runs when there are links stuck at 0 that actually have logged clicks,
+  // which means the column was freshly added to an existing database.
+  const needsBackfill = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM links l
+      WHERE l.click_count = 0
+        AND EXISTS (SELECT 1 FROM access_logs a WHERE a.link_id = l.id)
+    ) AS needs
+  `)
+  if (Boolean(needsBackfill.rows[0]?.needs)) {
+    await executeStatement(db, `
+      UPDATE links SET click_count = sub.cnt
+      FROM (
+        SELECT link_id, COUNT(*)::int AS cnt
+        FROM access_logs
+        WHERE link_id IS NOT NULL
+        GROUP BY link_id
+      ) sub
+      WHERE links.id = sub.link_id AND links.click_count = 0
+    `, warnings, 'backfill links.click_count')
+  }
 
   // --- Step 3: Add foreign keys (safe — skipped if already present) ---
 

@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3'
 import { createError, getRequestURL } from 'h3'
-import { and, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, lt, or, sql } from 'drizzle-orm'
 import { useRuntimeConfig } from '#imports'
 import type { CreateLinkInput, UpdateLinkInput } from '~/shared/schemas/link'
-import { access_logs, links } from '~/server/database/schema'
+import { links } from '~/server/database/schema'
 import { useDrizzle } from '~/server/utils/db'
 import { generateId } from '~/server/utils/id'
 import { useLinkCache, invalidateLinkCache } from '~/server/utils/cache'
@@ -237,33 +237,11 @@ export async function listLinks(
     filters.push(eq(links.tag_id, options.tag_id))
   }
 
-  // Optimized: Single query with LEFT JOIN instead of separate queries
+  // Use the denormalized click_count column instead of an expensive LEFT JOIN
   const rows = await db
-    .select({
-      id: links.id,
-      slug: links.slug,
-      url: links.url,
-      comment: links.comment,
-      title: links.title,
-      description: links.description,
-      image: links.image,
-      apple: links.apple,
-      google: links.google,
-      cloaking: links.cloaking,
-      redirect_with_query: links.redirect_with_query,
-      password: links.password,
-      unsafe: links.unsafe,
-      tag_id: links.tag_id,
-      sender_id: links.sender_id,
-      expiration: links.expiration,
-      created_at: links.created_at,
-      updated_at: links.updated_at,
-      click_count: sql<number>`COALESCE(COUNT(${access_logs.id}), 0)::int`,
-    })
+    .select()
     .from(links)
-    .leftJoin(access_logs, eq(access_logs.link_id, links.id))
     .where(filters.length ? and(...filters) : undefined)
-    .groupBy(links.id)
     .orderBy(desc(links.id))
     .limit(options.limit + 1)
 
@@ -311,28 +289,76 @@ export async function importLinks(
   items: CreateLinkInput[],
   overwrite = true,
 ) {
-  const imported: StoredLink[] = []
+  if (items.length === 0) return []
 
+  const db = await useDrizzle(event)
+  const runtimeConfig = useRuntimeConfig(event)
+
+  // Prepare all values: resolve slugs for items that need auto-generation
+  const values = []
   for (const item of items) {
-    if (overwrite) {
-      const upserted = await upsertLink(event, item)
-      if (upserted) {
-        imported.push(upserted)
-      }
-      continue
-    }
+    const slug = await ensureAvailableSlug(event, item.slug, item.slug_length)
+    values.push({
+      id: generateId(),
+      slug,
+      url: item.url,
+      comment: item.comment,
+      title: item.title,
+      description: item.description,
+      image: item.image,
+      apple: item.apple,
+      google: item.google,
+      cloaking: item.cloaking,
+      redirect_with_query: item.redirect_with_query,
+      password: item.password,
+      unsafe: item.unsafe,
+      expiration: item.expiration,
+      tag_id: item.tag_id,
+      sender_id: item.sender_id,
+      updated_at: new Date(),
+    })
+  }
 
-    if (item.slug) {
-      const existing = await getLink(event, item.slug)
-      if (existing) {
-        continue
-      }
-    }
+  let imported: StoredLink[]
 
-    const created = await createLink(event, item)
-    if (created) {
-      imported.push(created)
-    }
+  if (overwrite) {
+    // Batch upsert: single INSERT ... ON CONFLICT DO UPDATE
+    imported = await db
+      .insert(links)
+      .values(values)
+      .onConflictDoUpdate({
+        target: links.slug,
+        set: {
+          url: sql`EXCLUDED.url`,
+          comment: sql`EXCLUDED.comment`,
+          title: sql`EXCLUDED.title`,
+          description: sql`EXCLUDED.description`,
+          image: sql`EXCLUDED.image`,
+          apple: sql`EXCLUDED.apple`,
+          google: sql`EXCLUDED.google`,
+          cloaking: sql`EXCLUDED.cloaking`,
+          redirect_with_query: sql`EXCLUDED.redirect_with_query`,
+          password: sql`EXCLUDED.password`,
+          unsafe: sql`EXCLUDED.unsafe`,
+          expiration: sql`EXCLUDED.expiration`,
+          tag_id: sql`EXCLUDED.tag_id`,
+          sender_id: sql`EXCLUDED.sender_id`,
+          updated_at: new Date(),
+        },
+      })
+      .returning()
+  } else {
+    // Non-overwrite: batch insert, skip conflicts silently
+    imported = await db
+      .insert(links)
+      .values(values)
+      .onConflictDoNothing({ target: links.slug })
+      .returning()
+  }
+
+  // Invalidate cache for all affected slugs
+  for (const link of imported) {
+    invalidateLinkCache(link.slug, runtimeConfig.caseSensitive)
   }
 
   return imported

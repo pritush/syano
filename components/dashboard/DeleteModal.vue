@@ -87,5 +87,7 @@ function handleCancel() {
 
 function handleConfirm() {
   emit('confirm')
+  // Auto-close after confirm action is triggered
+  emit('update:modelValue', false)
 }
 </script>

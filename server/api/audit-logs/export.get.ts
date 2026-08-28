@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 500,
         statusMessage: 'Audit logs table not found',
-        message: 'The audit_logs table does not exist in the database. Please run the migration: database/migrations/add_audit_logs.sql',
+        message: 'The audit_logs table does not exist in the database. Please apply database updates from Dashboard -> Data Operations or run database/schema.sql',
       })
     }
     

@@ -137,7 +137,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await useAccessLog(event, link)
+  useAccessLog(event, link)
 
   if (isSocialBot(ua)) {
     setHeader(event, 'content-type', 'text/html; charset=utf-8')

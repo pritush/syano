@@ -98,172 +98,72 @@ export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuer
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
-  const [devices, browsers, countries, operatingSystems, languages, timezones, referrers, utmSources, utmMediums, utmCampaigns, utmTerms, utmContents] = await Promise.all([
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.device_type, ''), 'unknown') AS label, COUNT(*)::int AS views
+  // Single CTE query: materialize filtered data once, then aggregate 12 dimensions.
+  // Each SELECT leg is wrapped in parentheses so ORDER BY / LIMIT apply per-leg
+  // (PostgreSQL requires this for UNION ALL).
+  const { rows } = await pool.query(
+    `
+      WITH filtered AS (
+        SELECT a.device_type, a.browser, a.country, a.os, a.language,
+               a.timezone, a.referer,
+               a.utm_source, a.utm_medium, a.utm_campaign, a.utm_term, a.utm_content
         FROM access_logs a
         ${scope.joins}
         ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.browser, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.country, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.os, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.language, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.timezone, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT
-          CASE
-            WHEN a.referer IS NULL OR a.referer = '' THEN 'direct'
-            ELSE regexp_replace(a.referer, '^https?://([^/]+)/?.*$', '\\1')
-          END AS label,
-          COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.utm_source, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.utm_medium, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.utm_campaign, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.utm_term, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-    pool.query(
-      `
-        SELECT COALESCE(NULLIF(a.utm_content, ''), 'unknown') AS label, COUNT(*)::int AS views
-        FROM access_logs a
-        ${scope.joins}
-        ${scope.where}
-        GROUP BY 1
-        ORDER BY 2 DESC, 1 ASC
-        LIMIT 6
-      `,
-      scope.values,
-    ),
-  ])
+      )
+      (SELECT 'device' AS metric, COALESCE(NULLIF(device_type, ''), 'unknown') AS label, COUNT(*)::int AS views FROM filtered GROUP BY 2 ORDER BY views DESC, label ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'browser', COALESCE(NULLIF(browser, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'country', COALESCE(NULLIF(country, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'os', COALESCE(NULLIF(os, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'language', COALESCE(NULLIF(language, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'timezone', COALESCE(NULLIF(timezone, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'referrer',
+        CASE WHEN referer IS NULL OR referer = '' THEN 'direct'
+             ELSE regexp_replace(referer, '^https?://([^/]+)/?.*$', '\\1')
+        END,
+        COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'utm_source', COALESCE(NULLIF(utm_source, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'utm_medium', COALESCE(NULLIF(utm_medium, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'utm_campaign', COALESCE(NULLIF(utm_campaign, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'utm_term', COALESCE(NULLIF(utm_term, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+      UNION ALL
+      (SELECT 'utm_content', COALESCE(NULLIF(utm_content, ''), 'unknown'), COUNT(*)::int FROM filtered GROUP BY 2 ORDER BY 3 DESC, 2 ASC LIMIT 6)
+    `,
+    scope.values,
+  )
 
-  return {
-    devices: devices.rows,
-    browsers: browsers.rows,
-    countries: countries.rows,
-    operating_systems: operatingSystems.rows,
-    languages: languages.rows,
-    timezones: timezones.rows,
-    referrers: referrers.rows,
-    utm_sources: utmSources.rows,
-    utm_mediums: utmMediums.rows,
-    utm_campaigns: utmCampaigns.rows,
-    utm_terms: utmTerms.rows,
-    utm_contents: utmContents.rows,
+  // Partition rows by metric type
+  const result: Record<string, Array<{ label: string; views: number }>> = {
+    devices: [], browsers: [], countries: [], operating_systems: [],
+    languages: [], timezones: [], referrers: [],
+    utm_sources: [], utm_mediums: [], utm_campaigns: [], utm_terms: [], utm_contents: [],
   }
+
+  const metricToKey: Record<string, string> = {
+    device: 'devices', browser: 'browsers', country: 'countries', os: 'operating_systems',
+    language: 'languages', timezone: 'timezones', referrer: 'referrers',
+    utm_source: 'utm_sources', utm_medium: 'utm_mediums', utm_campaign: 'utm_campaigns',
+    utm_term: 'utm_terms', utm_content: 'utm_contents',
+  }
+
+  for (const row of rows) {
+    const key = metricToKey[row.metric as string]
+    if (key) {
+      result[key]!.push({ label: row.label as string, views: row.views as number })
+    }
+  }
+
+  return result
 }
 
 export async function getAnalyticsHeatmap(event: H3Event, filters: AnalyticsQuery) {

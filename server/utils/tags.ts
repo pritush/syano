@@ -62,23 +62,29 @@ export async function createTag(event: H3Event, name: string) {
 export async function deleteTag(event: H3Event, id: string) {
   const db = await useDrizzle(event)
 
-  await db
-    .update(links)
-    .set({
-      tag_id: null,
-      updated_at: new Date(),
-    })
-    .where(eq(links.tag_id, id))
+  const tag = await db.transaction(async (tx) => {
+    // Explicitly nullify tag_id and bump updated_at (FK ON DELETE SET NULL
+    // handles the null but won't update the timestamp)
+    await tx
+      .update(links)
+      .set({
+        tag_id: null,
+        updated_at: new Date(),
+      })
+      .where(eq(links.tag_id, id))
 
-  const [tag] = await db
-    .delete(tags)
-    .where(eq(tags.id, id))
-    .returning()
+    const [deleted] = await tx
+      .delete(tags)
+      .where(eq(tags.id, id))
+      .returning()
+
+    return deleted || null
+  })
 
   // Invalidate cache
   invalidateTagsCache()
 
-  return tag || null
+  return tag
 }
 
 export async function listTagsWithCounts(event: H3Event) {
