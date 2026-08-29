@@ -11,6 +11,8 @@
           </h1>
           <p class="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
             Syano is a self-hosted URL shortner & link management tool. The package comes with dashboards, analytics and homepage settings.
+          <br> <b>Demo </b>
+          <br> user : viewer : password: view123 
           </p>
         </div>
         <div class="flex flex-wrap gap-3">
