@@ -303,15 +303,32 @@ async function recordMigration(db: DbExecutor, id: string) {
 // ---------------------------------------------------------------------------
 
 async function createUpdatedAtTrigger(db: DbExecutor, warnings: string[]) {
-  await executeStatement(db, `
-    CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      NEW.updated_at = NOW();
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql
-  `, warnings, 'update_updated_at_column function', { critical: true })
+  // Some managed/restricted PostgreSQL providers (e.g. Neon free tier,
+  // Supabase restricted roles) disallow CREATE FUNCTION / PL/pgSQL for
+  // non-superusers. The trigger is a convenience that keeps updated_at
+  // current automatically; it is NOT a structural requirement. Degrade
+  // gracefully so the rest of the upgrade is not aborted.
+  let functionCreated = true
+  try {
+    await db.execute(sql.raw(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `))
+  } catch (err: any) {
+    functionCreated = false
+    warnings.push(
+      `update_updated_at_column function: ${err.message || 'Unknown error'} — updated_at will not be maintained automatically`,
+    )
+  }
+
+  if (!functionCreated) {
+    return
+  }
 
   const result = await db.execute(sql`
     SELECT EXISTS (
@@ -332,7 +349,7 @@ async function createUpdatedAtTrigger(db: DbExecutor, warnings: string[]) {
       BEFORE UPDATE ON links
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()
-  `, warnings, 'update_links_updated_at trigger', { critical: true })
+  `, warnings, 'update_links_updated_at trigger')
 }
 
 async function hasLinksSenderIdForeignKey(db: DbExecutor): Promise<boolean> {
