@@ -5,27 +5,46 @@
 
 const CLOUD_PROVIDERS = [
   'supabase.co',
+  'supabase.com',
+  'supabase.net',
   'neon.tech',
+  'neon.build',
   'aivencloud.com',
   'aws.com',
   'azure.com',
   'digitalocean.com',
   'heroku.com',
   'railway.app',
+  'render.com',
+  'koyeb.app',
+  'fly.dev',
+  'tembo.io',
 ]
 
 export function shouldUseSSL(connectionString: string): boolean {
   if (!connectionString) return false
 
-  // Check for explicit sslmode in connection string
-  if (connectionString.includes('sslmode=require') || connectionString.includes('sslmode=verify-')) {
-    return true
-  }
+  const lower = connectionString.toLowerCase()
 
-  if (connectionString.includes('sslmode=disable') || connectionString.includes('sslmode=prefer')) {
+  // Explicit disable flags
+  if (lower.includes('sslmode=disable') || lower.includes('ssl=false') || lower.includes('ssl=0')) {
     return false
   }
 
-  // Auto-detect cloud providers that require SSL
-  return CLOUD_PROVIDERS.some(provider => connectionString.includes(provider))
+  // Check for explicit sslmode or ssl in connection string
+  if (
+    lower.includes('sslmode=require') ||
+    lower.includes('sslmode=verify-') ||
+    lower.includes('sslmode=prefer') ||
+    lower.includes('ssl=true') ||
+    lower.includes('ssl=1')
+  ) {
+    return true
+  }
+
+  // Auto-detect cloud providers or poolers that require SSL
+  return (
+    CLOUD_PROVIDERS.some(provider => lower.includes(provider)) ||
+    lower.includes('pooler.')
+  )
 }

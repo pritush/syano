@@ -303,15 +303,16 @@ async function recordMigration(db: DbExecutor, id: string) {
 // ---------------------------------------------------------------------------
 
 async function createUpdatedAtTrigger(db: DbExecutor, warnings: string[]) {
-  // Some managed/restricted PostgreSQL providers (e.g. Neon free tier,
-  // Supabase restricted roles) disallow CREATE FUNCTION / PL/pgSQL for
-  // non-superusers. The trigger is a convenience that keeps updated_at
-  // current automatically; it is NOT a structural requirement. Degrade
-  // gracefully so the rest of the upgrade is not aborted.
-  let functionCreated = true
+  // Some managed/restricted PostgreSQL providers (e.g. Neon, Supabase,
+  // CockroachDB, connection poolers) disallow CREATE FUNCTION / PL/pgSQL
+  // for non-superusers.
+  // This operation is executed outside the core transaction because PostgreSQL
+  // automatically aborts a transaction on any error (even if caught in JS).
+  // The trigger is a convenience that keeps updated_at current automatically;
+  // application code also sets updated_at directly on updates.
   try {
     await db.execute(sql.raw(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      CREATE OR REPLACE FUNCTION public.update_updated_at_column()
       RETURNS TRIGGER AS $$
       BEGIN
         NEW.updated_at = NOW();
@@ -320,36 +321,36 @@ async function createUpdatedAtTrigger(db: DbExecutor, warnings: string[]) {
       $$ LANGUAGE plpgsql
     `))
   } catch (err: any) {
-    functionCreated = false
     warnings.push(
-      `update_updated_at_column function: ${err.message || 'Unknown error'} — updated_at will not be maintained automatically`,
+      `update_updated_at_column function: ${err.message || 'Unknown error'} — updated_at will not be maintained automatically by DB trigger`,
     )
-  }
-
-  if (!functionCreated) {
     return
   }
 
-  const result = await db.execute(sql`
-    SELECT EXISTS (
-      SELECT 1
-      FROM pg_trigger
-      WHERE tgrelid = 'public.links'::regclass
-        AND tgname = 'update_links_updated_at'
-        AND NOT tgisinternal
-    ) AS exists
-  `)
+  try {
+    const result = await db.execute(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgrelid = 'public.links'::regclass
+          AND tgname = 'update_links_updated_at'
+          AND NOT tgisinternal
+      ) AS exists
+    `)
 
-  if (Boolean(result.rows[0]?.exists)) {
-    return
+    if (Boolean(result.rows[0]?.exists)) {
+      return
+    }
+
+    await db.execute(sql.raw(`
+      CREATE TRIGGER update_links_updated_at
+        BEFORE UPDATE ON public.links
+        FOR EACH ROW
+        EXECUTE FUNCTION public.update_updated_at_column()
+    `))
+  } catch (err: any) {
+    warnings.push(`update_links_updated_at trigger: ${err.message || 'Unknown error'}`)
   }
-
-  await executeStatement(db, `
-    CREATE TRIGGER update_links_updated_at
-      BEFORE UPDATE ON links
-      FOR EACH ROW
-      EXECUTE FUNCTION update_updated_at_column()
-  `, warnings, 'update_links_updated_at trigger')
 }
 
 async function hasLinksSenderIdForeignKey(db: DbExecutor): Promise<boolean> {
@@ -489,11 +490,6 @@ async function applySchema(db: DbExecutor, warnings: string[]) {
   await executeStatement(db, `
     CREATE UNIQUE INDEX IF NOT EXISTS sender_ids_name_unique ON sender_ids(name)
   `, warnings, 'sender_ids_name_unique index', { critical: true })
-
-  await executeStatement(db,
-    'DROP INDEX IF EXISTS idx_sender_ids_name_unique',
-    warnings, 'legacy sender_ids_name_unique index cleanup', { critical: true },
-  )
 
   await executeStatement(db, `
     CREATE TABLE IF NOT EXISTS links (
@@ -736,9 +732,8 @@ async function applySchema(db: DbExecutor, warnings: string[]) {
     ON CONFLICT (id) DO NOTHING
   `, warnings, 'default site_settings row', { critical: true })
 
-  // --- Step 5: Create updated_at trigger ---
-
-  await createUpdatedAtTrigger(db, warnings)
+  // Note: updated_at trigger creation is executed outside the core transaction
+  // so that environments lacking CREATE FUNCTION privileges do not abort the transaction.
 }
 
 // ---------------------------------------------------------------------------
@@ -750,6 +745,7 @@ async function runIndexes(db: DbExecutor, warnings: string[]) {
     await createIndexSafe(db, name, statement, warnings)
   }
 
+  await executeStatement(db, 'DROP INDEX IF EXISTS idx_sender_ids_name_unique', warnings, 'legacy sender_ids_name_unique index cleanup')
   await executeStatement(db, 'DROP INDEX IF EXISTS idx_links_slug_lower', warnings, 'drop idx_links_slug_lower')
 
   for (const [name, statement] of PERFORMANCE_INDEXES) {
@@ -813,6 +809,22 @@ export function releaseUpgradeLock() {
   globalStore.__syanoUpgradeInProgress = false
 }
 
+async function isAdvisoryLockSupported(db: DbExecutor): Promise<boolean> {
+  try {
+    const result = await db.execute(sql`
+      SELECT pg_try_advisory_lock(${DATABASE_UPGRADE_LOCK_KEY}::bigint) AS locked
+    `)
+    if (Boolean(result.rows[0]?.locked)) {
+      await db.execute(sql`
+        SELECT pg_advisory_unlock(${DATABASE_UPGRADE_LOCK_KEY}::bigint)
+      `)
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function acquireDatabaseUpgradeLock(db: DbExecutor) {
   const result = await db.execute(sql`
     SELECT pg_try_advisory_xact_lock(${DATABASE_UPGRADE_LOCK_KEY}::bigint) AS locked
@@ -835,6 +847,7 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
   const warnings: string[] = []
 
   const freshInstall = !(await hasApplicationSchema(db))
+  const advisoryLockSupported = await isAdvisoryLockSupported(db)
 
   // PostgreSQL DDL is transactional. Keeping required schema work and the
   // migration marker in one transaction guarantees that a failed fresh
@@ -842,7 +855,9 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
   // Best-effort indexes run afterwards: PostgreSQL marks a transaction failed
   // after any index error, even when that error is caught in application code.
   await db.transaction(async (tx) => {
-    await acquireDatabaseUpgradeLock(tx)
+    if (advisoryLockSupported) {
+      await acquireDatabaseUpgradeLock(tx)
+    }
     await ensureMigrationTracking(tx)
     await applySchema(tx, warnings)
 
@@ -856,9 +871,10 @@ export async function runDatabaseUpgrade(db: DrizzleDb, caseSensitive: boolean):
     await recordMigration(tx, `v${MIGRATION_VERSION}`)
   })
 
-  // Existing data can prevent a new foreign key from being added. Keep that
-  // repair outside the core transaction so the usable schema is retained and
-  // the administrator receives a precise warning to resolve the bad rows.
+  // PostgreSQL marks an entire transaction aborted upon any error, even if
+  // caught in application code. Non-critical features like triggers/functions,
+  // foreign keys over existing data, and indexes run outside the core transaction.
+  await createUpdatedAtTrigger(db, warnings)
   await ensureLinksSenderIdForeignKey(db, warnings)
   await ensureTagsNameUniqueConstraint(db, warnings)
 
