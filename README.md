@@ -2,8 +2,6 @@
 
 <div align="center">
 
-![Syano - Open Source URL Shortener](https://raw.githubusercontent.com/free-whiteboard-online/Free-Erasorio-Alternative-for-Collaborative-Design/ae5d11ccf2a3ed0620ec288ecc6d8a1ac14f3be1/uploads/2026-04-12T11-34-35-368Z-fx4qdk2mo.png)
-
 **Syano is a powerful self-hosted URL shortener and open source link management platform, ready for enterprise implementation. Take complete control of your short links with advanced analytics, QR codes, link-in-bio pages, and enterprise-grade features. The best Bitly alternative for privacy-conscious teams.**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
