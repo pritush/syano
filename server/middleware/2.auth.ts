@@ -23,8 +23,8 @@ export default defineEventHandler(async (event) => {
     return
   }
 
-  // Login endpoint must be public
-  if (pathname === '/api/auth/login') {
+  // Login and logout endpoints must be public
+  if (pathname === '/api/auth/login' || pathname === '/api/auth/logout') {
     return
   }
 

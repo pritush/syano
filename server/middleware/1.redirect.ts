@@ -3,6 +3,7 @@ import { useAppConfig, useRuntimeConfig } from '#imports'
 import { useAccessLog } from '~/server/utils/access-log'
 import { getLink } from '~/server/utils/link-store'
 import { renderCloakPage, renderOpenGraphPage, renderPasswordPage, renderUnsafePage } from '~/server/utils/template'
+import { generateCsrfToken, validateCsrfToken } from '~/server/utils/csrf'
 
 function isReservedSlug(slug: string, reserveSlug: string[]) {
   return reserveSlug.map((item) => item.toLowerCase()).includes(slug.toLowerCase())
@@ -105,9 +106,22 @@ export default defineEventHandler(async (event) => {
   const confirm = String(body.confirm || query.confirm || '').toLowerCase() === 'true'
 
   if (link.password && password !== link.password) {
+    // Validate CSRF token on POST submissions
+    if (method === 'POST' && password) {
+      const csrfValid = validateCsrfToken(event, body._csrf as string | undefined)
+      if (!csrfValid) {
+        setResponseStatus(event, 403)
+        setHeader(event, 'content-type', 'text/html; charset=utf-8')
+        const csrfToken = generateCsrfToken(event)
+        return renderPasswordPage(requestUrl.pathname, true, csrfToken)
+      }
+    }
+
+    // Generate CSRF token for the password form
+    const csrfToken = generateCsrfToken(event)
     setResponseStatus(event, password ? 401 : 200)
     setHeader(event, 'content-type', 'text/html; charset=utf-8')
-    return renderPasswordPage(requestUrl.pathname, Boolean(password))
+    return renderPasswordPage(requestUrl.pathname, Boolean(password), csrfToken)
   }
 
   if (link.unsafe && !confirm) {

@@ -4,22 +4,85 @@ import { links, tags, access_logs, site_settings } from '~/server/database/schem
 import { requirePermission } from '~/server/utils/auth'
 import { PERMISSIONS } from '~/shared/permissions'
 
+// ── Typed schemas for backup record validation ──────────────
+// Prevents arbitrary/malicious data from being inserted via restore
+
+const tagRecordSchema = z.object({
+  id: z.string().max(64),
+  name: z.string().max(120),
+  created_at: z.string().nullish(),
+})
+
+const linkRecordSchema = z.object({
+  id: z.string().max(64),
+  slug: z.string().max(128),
+  url: z.string().url(),
+  comment: z.string().nullish(),
+  title: z.string().nullish(),
+  description: z.string().nullish(),
+  image: z.string().nullish(),
+  apple: z.string().nullish(),
+  google: z.string().nullish(),
+  cloaking: z.boolean().default(false),
+  redirect_with_query: z.boolean().default(false),
+  password: z.string().nullish(),
+  unsafe: z.boolean().default(false),
+  tag_id: z.string().max(64).nullish(),
+  sender_id: z.string().uuid().nullish(),
+  expiration: z.number().nullish(),
+  click_count: z.number().int().default(0),
+  created_at: z.string().nullish(),
+  updated_at: z.string().nullish(),
+})
+
+const accessLogRecordSchema = z.object({
+  id: z.string().uuid(),
+  link_id: z.string().max(64).nullish(),
+  slug: z.string().max(128).nullish(),
+  url: z.string().nullish(),
+  ua: z.string().nullish(),
+  ip: z.string().nullish(),
+  referer: z.string().nullish(),
+  country: z.string().max(120).nullish(),
+  region: z.string().nullish(),
+  city: z.string().nullish(),
+  timezone: z.string().nullish(),
+  language: z.string().nullish(),
+  os: z.string().nullish(),
+  browser: z.string().nullish(),
+  browser_type: z.string().nullish(),
+  device: z.string().nullish(),
+  device_type: z.string().nullish(),
+  latitude: z.number().nullish(),
+  longitude: z.number().nullish(),
+  created_at: z.string().nullish(),
+})
+
+const siteSettingsRecordSchema = z.object({
+  id: z.string().max(8),
+  homepage_mode: z.string().max(20).nullish(),
+  redirect_url: z.string().max(2048).nullish(),
+  redirect_timeout: z.number().nullish(),
+  bio_content: z.any().nullish(), // JSONB — validated structurally at insert
+  trai_sms_enabled: z.boolean().default(false),
+})
+
 const RestoreOptionsSchema = z.object({
   backup: z.object({
     version: z.string(),
     exported_at: z.string(),
     tables: z.object({
       links: z.object({
-        data: z.array(z.any()),
+        data: z.array(linkRecordSchema),
       }).optional(),
       tags: z.object({
-        data: z.array(z.any()),
+        data: z.array(tagRecordSchema),
       }).optional(),
       access_logs: z.object({
-        data: z.array(z.any()),
+        data: z.array(accessLogRecordSchema),
       }).optional(),
       site_settings: z.object({
-        data: z.array(z.any()),
+        data: z.array(siteSettingsRecordSchema),
       }).optional(),
     }),
   }),

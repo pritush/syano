@@ -1,8 +1,9 @@
-import { createError, defineEventHandler, readBody } from 'h3'
+import { createError, defineEventHandler, readBody, setCookie } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { loginSchema } from '~/shared/schemas/user'
 import { WILDCARD_PERMISSION } from '~/shared/permissions'
 import { findUserByUsername, verifyPassword, signJWT } from '~/server/utils/auth'
+import { checkLoginRateLimit, recordFailedLogin, clearLoginRateLimit } from '~/server/utils/login-rate-limit'
 
 defineRouteMeta({
   openAPI: {
@@ -138,6 +139,9 @@ defineRouteMeta({
 })
 
 export default defineEventHandler(async (event) => {
+  // Rate limit check — blocks before any auth processing
+  checkLoginRateLimit(event)
+
   const body = await readBody(event)
   const parsed = loginSchema.safeParse(body)
 
@@ -151,8 +155,13 @@ export default defineEventHandler(async (event) => {
   const { username, password } = parsed.data
   const config = useRuntimeConfig(event)
 
+  // Generic error message for all auth failures — prevents username enumeration
+  const INVALID_CREDENTIALS_ERROR = 'Invalid username or password'
+
   // 1. Check root user (from .env)
   if (username === config.siteUser && password === config.siteToken) {
+    clearLoginRateLimit(event)
+
     const token = await signJWT({
       sub: 'root',
       username: config.siteUser,
@@ -160,6 +169,15 @@ export default defineEventHandler(async (event) => {
       permissions: [WILDCARD_PERMISSION],
       isRoot: true,
     }, event)
+
+    // Set httpOnly cookie for browser-based clients
+    setCookie(event, 'auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24 * 30, // 30 days (matches JWT expiry)
+      path: '/',
+    })
 
     return {
       token,
@@ -177,26 +195,33 @@ export default defineEventHandler(async (event) => {
   const dbUser = await findUserByUsername(event, username)
 
   if (!dbUser) {
+    recordFailedLogin(event)
     throw createError({
       statusCode: 401,
-      statusMessage: 'Invalid username or password',
+      statusMessage: INVALID_CREDENTIALS_ERROR,
     })
   }
 
+  // Disabled accounts get the same error as non-existent users (prevents enumeration)
   if (!dbUser.is_active) {
+    recordFailedLogin(event)
     throw createError({
       statusCode: 401,
-      statusMessage: 'Account is disabled. Contact your administrator.',
+      statusMessage: INVALID_CREDENTIALS_ERROR,
     })
   }
 
   const passwordValid = await verifyPassword(password, dbUser.password_hash)
   if (!passwordValid) {
+    recordFailedLogin(event)
     throw createError({
       statusCode: 401,
-      statusMessage: 'Invalid username or password',
+      statusMessage: INVALID_CREDENTIALS_ERROR,
     })
   }
+
+  // Successful login — clear rate limit
+  clearLoginRateLimit(event)
 
   const permissions = (dbUser.permissions || []) as string[]
 
@@ -207,6 +232,15 @@ export default defineEventHandler(async (event) => {
     permissions,
     isRoot: false,
   }, event)
+
+  // Set httpOnly cookie for browser-based clients
+  setCookie(event, 'auth_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 60 * 60 * 24 * 30, // 30 days (matches JWT expiry)
+    path: '/',
+  })
 
   return {
     token,

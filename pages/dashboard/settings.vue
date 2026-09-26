@@ -107,6 +107,7 @@ const form = reactive({
   profile_avatar_url: '',
   bio_links: [] as BioLinkRow[],
   socials: [] as BioSocialRow[],
+  trai_sms_enabled: false,
 })
 
 const newSocialPlatform = ref('')
@@ -157,6 +158,7 @@ function applySettings(settings: SiteSettings) {
     platform: social.platform,
     url: social.url,
   }))
+  form.trai_sms_enabled = settings.trai_sms_enabled
 }
 
 function formatUrl(val: string): string {
@@ -195,6 +197,7 @@ function buildSettingsPayload(): SiteSettings {
           url: formatUrl(social.url),
         })),
     },
+    trai_sms_enabled: form.trai_sms_enabled,
   }
 }
 

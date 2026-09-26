@@ -1,34 +1,26 @@
 type DashboardRequestOptions<T> = Parameters<typeof $fetch<T>>[1]
 
 /**
- * Dashboard API client with JWT authentication
- * Supports both legacy endpoints and V1 API endpoints
+ * Dashboard API client with httpOnly cookie authentication.
+ * The JWT is sent automatically via the auth_token cookie.
+ * No need to manually attach Authorization headers for dashboard requests.
  */
 export function useDashboardApi() {
-  const { token, clearToken } = useAuthToken()
+  const { clearToken } = useAuthToken()
 
   /**
-   * Make an authenticated API request
-   * Automatically adds JWT Bearer token to headers
+   * Make an authenticated API request.
+   * The httpOnly auth cookie is sent automatically by the browser.
    */
   async function request<T>(path: string, options: DashboardRequestOptions<T> = {}) {
-    const headers: Record<string, string> = {
-      ...((options.headers as Record<string, string> | undefined) || {}),
-    }
-
-    if (token.value) {
-      headers.authorization = `Bearer ${token.value}`
-    }
-
     try {
       return await $fetch<T>(path, {
         ...options,
-        headers,
       })
     } catch (error: any) {
       const status = error?.response?.status
       if (status === 401) {
-        clearToken()
+        await clearToken()
 
         if (import.meta.client) {
           await navigateTo('/dashboard/login')

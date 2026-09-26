@@ -89,7 +89,7 @@ async function _writeAccessLog(
   result: ReturnType<UAParser['getResult']>,
   geo: ReturnType<typeof geoip.lookup>,
   deviceType: string,
-  query: ReturnType<typeof getQuery>,
+  query: Record<string, any>,
 ) {
   const db = await useDrizzle(event)
 

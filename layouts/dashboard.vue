@@ -162,7 +162,7 @@ const colorModeLabel = computed(() => {
 })
 
 async function logout() {
-  clearToken()
+  await clearToken()
   await navigateTo('/dashboard/login')
 }
 

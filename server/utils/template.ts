@@ -1,12 +1,28 @@
 import { redirectText } from '~/server/utils/redirect-i18n'
 
+// ── HTML Escaping Utilities ──────────────────────────────
+// Prevents XSS by escaping user-controlled values before HTML interpolation
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function escapeAttr(str: string): string {
+  return escapeHtml(str)
+}
+
 function renderDocument(title: string, body: string) {
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
     <style>
       :root { color-scheme: light dark; }
       * { box-sizing: border-box; }
@@ -155,16 +171,17 @@ function renderDocument(title: string, body: string) {
 </html>`
 }
 
-export function renderPasswordPage(action: string, hasError = false) {
+export function renderPasswordPage(action: string, hasError = false, csrfToken?: string) {
   return renderDocument(
     redirectText.passwordTitle,
     `<main>
-      <h1>${redirectText.passwordTitle}</h1>
-      <p>${redirectText.passwordDescription}</p>
+      <h1>${escapeHtml(redirectText.passwordTitle)}</h1>
+      <p>${escapeHtml(redirectText.passwordDescription)}</p>
       ${hasError ? '<div class="error-message">That password did not match. Please try again.</div>' : ''}
-      <form method="post" action="${action}">
+      <form method="post" action="${escapeAttr(action)}">
+        ${csrfToken ? `<input type="hidden" name="_csrf" value="${escapeAttr(csrfToken)}" />` : ''}
         <input type="password" name="password" placeholder="Enter password" autocomplete="current-password" required />
-        <button type="submit">${redirectText.passwordButton}</button>
+        <button type="submit">${escapeHtml(redirectText.passwordButton)}</button>
       </form>
     </main>`,
   )
@@ -174,14 +191,16 @@ export function renderUnsafePage(continueTo: string) {
   return renderDocument(
     redirectText.unsafeTitle,
     `<main>
-      <h1>${redirectText.unsafeTitle}</h1>
-      <p>${redirectText.unsafeDescription}</p>
-      <a class="button" href="${continueTo}">${redirectText.unsafeButton}</a>
+      <h1>${escapeHtml(redirectText.unsafeTitle)}</h1>
+      <p>${escapeHtml(redirectText.unsafeDescription)}</p>
+      <a class="button" href="${escapeAttr(continueTo)}">${escapeHtml(redirectText.unsafeButton)}</a>
     </main>`,
   )
 }
 
 export function renderCloakPage(destination: string) {
+  const safeDestination = escapeAttr(destination)
+  const safeDestinationHtml = escapeHtml(destination)
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -294,7 +313,7 @@ export function renderCloakPage(destination: string) {
     <div class="iframe-container">
       <iframe 
         id="destination-frame"
-        src="${destination}" 
+        src="${safeDestination}" 
         title="Destination"
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
       ></iframe>
@@ -305,33 +324,33 @@ export function renderCloakPage(destination: string) {
         <div class="error-icon">🔒</div>
         <h1>Site Cannot Be Framed</h1>
         <p>This website has security restrictions that prevent it from being displayed in a frame. This is a security feature set by the destination site.</p>
-        <div class="url-box">${destination}</div>
-        <a href="${destination}" class="button">Open Site Directly</a>
+        <div class="url-box">${safeDestinationHtml}</div>
+        <a href="${safeDestination}" class="button">Open Site Directly</a>
       </div>
     </div>
 
     <script>
       // Detect if iframe fails to load due to CSP
-      const iframe = document.getElementById('destination-frame');
-      const errorOverlay = document.getElementById('error-overlay');
-      let hasLoaded = false;
+      var iframe = document.getElementById('destination-frame');
+      var errorOverlay = document.getElementById('error-overlay');
+      var hasLoaded = false;
       
       // Listen for iframe load success
-      iframe.addEventListener('load', () => {
+      iframe.addEventListener('load', function() {
         hasLoaded = true;
       });
       
       // Handle iframe errors (CSP violations)
-      iframe.addEventListener('error', () => {
+      iframe.addEventListener('error', function() {
         errorOverlay.style.display = 'flex';
       });
       
       // Fallback: Check after 5 seconds if iframe never loaded
-      setTimeout(() => {
+      setTimeout(function() {
         if (!hasLoaded) {
           // Try to check if iframe is accessible
           try {
-            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
             if (!iframeDoc || iframeDoc.body.innerHTML === '') {
               errorOverlay.style.display = 'flex';
             }
@@ -343,7 +362,7 @@ export function renderCloakPage(destination: string) {
       }, 5000);
       
       // Listen for console errors (CSP violations)
-      window.addEventListener('securitypolicyviolation', (e) => {
+      window.addEventListener('securitypolicyviolation', function(e) {
         if (e.violatedDirective.includes('frame-ancestors')) {
           errorOverlay.style.display = 'flex';
         }
@@ -354,19 +373,25 @@ export function renderCloakPage(destination: string) {
 }
 
 export function renderOpenGraphPage(destination: string, title: string | null, description: string | null, image: string | null) {
+  const safeDestination = escapeAttr(destination)
+  const safeDestinationHtml = escapeHtml(destination)
+  const safeTitle = escapeAttr(title || 'Syano link')
+  const safeDescription = escapeAttr(description || destination)
+  const safeImage = image ? escapeAttr(image) : ''
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="refresh" content="0;url=${destination}">
-    <meta property="og:title" content="${title || 'Syano link'}">
-    <meta property="og:description" content="${description || destination}">
-    ${image ? `<meta property="og:image" content="${image}">` : ''}
-    <title>${title || 'Syano link'}</title>
+    <meta http-equiv="refresh" content="0;url=${safeDestination}">
+    <meta property="og:title" content="${safeTitle}">
+    <meta property="og:description" content="${safeDescription}">
+    ${safeImage ? `<meta property="og:image" content="${safeImage}">` : ''}
+    <title>${escapeHtml(title || 'Syano link')}</title>
   </head>
   <body>
-    <p>Redirecting to <a href="${destination}">${destination}</a></p>
+    <p>Redirecting to <a href="${safeDestination}">${safeDestinationHtml}</a></p>
   </body>
 </html>`
 }
+
 

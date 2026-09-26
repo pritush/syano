@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { createError, getHeader } from 'h3'
+import { createError, getHeader, getCookie } from 'h3'
 import { hash, compare } from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 import { eq } from 'drizzle-orm'
@@ -28,7 +28,7 @@ interface JWTPayload {
 
 // ── Password Hashing ──────────────────────────────────────
 
-const BCRYPT_COST = 10
+const BCRYPT_COST = 12
 
 export async function hashPassword(plain: string): Promise<string> {
   return hash(plain, BCRYPT_COST)
@@ -75,16 +75,25 @@ export async function verifyJWTToken(token: string, event?: H3Event): Promise<JW
 
 /**
  * Extract authenticated user from request.
- * Supports both JWT tokens and legacy raw-token auth (for root user).
+ * Supports:
+ *   1. Authorization: Bearer <JWT> header
+ *   2. httpOnly auth_token cookie (browser clients)
+ *   3. Legacy raw-token auth (for root user)
  */
 export async function getAuthUser(event: H3Event): Promise<AuthUser | null> {
   const authorization = getHeader(event, 'authorization') || ''
+  let token = ''
 
-  if (!authorization.startsWith('Bearer ')) {
-    return null
+  if (authorization.startsWith('Bearer ')) {
+    token = authorization.slice(7)
+  } else {
+    // Fallback: read from httpOnly cookie
+    token = getCookie(event, 'auth_token') || ''
   }
 
-  const token = authorization.slice(7)
+  if (!token) {
+    return null
+  }
   const config = useRuntimeConfig(event)
 
   // 1. Try JWT verification first

@@ -13,7 +13,9 @@ export const sender_ids = pgTable('sender_ids', {
   is_active: boolean('is_active').default(true),
   is_default: boolean('is_default').default(false),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-}, (table) => [uniqueIndex('sender_ids_name_unique').on(table.name)])
+}, (table) => ({
+  nameUnique: uniqueIndex('sender_ids_name_unique').on(table.name),
+}))
 
 export const links = pgTable('links', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
