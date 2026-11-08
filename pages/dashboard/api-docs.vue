@@ -1,18 +1,20 @@
 <script setup lang="ts">
 definePageMeta({
   layout: 'dashboard',
+  middleware: 'dashboard-auth',
 })
 
 useHead({
   title: 'API Documentation — Syano',
 })
 
-const { token } = useAuthToken()
+const { token, isAuthenticated } = useAuthToken()
 
-// Build the URL to the server-rendered Scalar page, passing the JWT token
+// Build the URL to the server-rendered Scalar page.
+// Passes the JWT token if present in memory, otherwise falls back to /api/scalar which authenticates via httpOnly cookie.
 const scalarUrl = computed(() => {
-  if (!token.value) return ''
-  return `/api/scalar?token=${encodeURIComponent(token.value)}`
+  if (!isAuthenticated.value) return ''
+  return token.value ? `/api/scalar?token=${encodeURIComponent(token.value)}` : '/api/scalar'
 })
 
 const loading = ref(true)
