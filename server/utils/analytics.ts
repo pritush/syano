@@ -23,11 +23,15 @@ function buildFilterSql(filters: AnalyticsQuery): QueryFragment {
     values: [],
   }
 
-  if (filters.start_date && filters.end_date) {
-    fragment.values.push(filters.start_date)
-    fragment.where.push(`a.created_at >= $${fragment.values.length}::timestamp`)
-    fragment.values.push(filters.end_date)
-    fragment.where.push(`a.created_at < $${fragment.values.length}::timestamp + interval '1 day'`)
+  if (filters.start_date || filters.end_date) {
+    if (filters.start_date) {
+      fragment.values.push(filters.start_date)
+      fragment.where.push(`a.created_at >= $${fragment.values.length}::timestamp`)
+    }
+    if (filters.end_date) {
+      fragment.values.push(filters.end_date)
+      fragment.where.push(`a.created_at < $${fragment.values.length}::timestamp + interval '1 day'`)
+    }
   } else {
     fragment.values.push(filters.days || 30)
     fragment.where.push(`a.created_at >= NOW() - ($${fragment.values.length} * interval '1 day')`)

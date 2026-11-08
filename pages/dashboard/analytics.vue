@@ -227,10 +227,17 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
+function isValidDate(d: unknown): d is Date {
+  return d instanceof Date && !isNaN(d.getTime())
+}
+
 function queryParams() {
+  const start = dateRange.value?.start
+  const end = dateRange.value?.end
+
   return {
-    start_date: dateRange.value?.start ? format(dateRange.value.start, 'yyyy-MM-dd') : undefined,
-    end_date: dateRange.value?.end ? format(dateRange.value.end, 'yyyy-MM-dd') : undefined,
+    start_date: isValidDate(start) ? format(start, 'yyyy-MM-dd') : undefined,
+    end_date: isValidDate(end) ? format(end, 'yyyy-MM-dd') : undefined,
     slug: slug.value.trim() || undefined,
     tag_id: selectedTagId.value || undefined,
   }
@@ -280,7 +287,15 @@ async function loadAnalytics() {
   }
 }
 
-watch(dateRange, () => {
+watch(dateRange, (newVal) => {
+  if (newVal) {
+    const hasValidStart = isValidDate(newVal.start)
+    const hasValidEnd = isValidDate(newVal.end)
+    // If start is set but end is not, don't trigger fetch yet (selection in progress)
+    if (hasValidStart && !hasValidEnd) {
+      return
+    }
+  }
   loadAnalytics()
 }, { deep: true })
 
