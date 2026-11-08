@@ -29,49 +29,95 @@ function isValidDate(d: unknown): d is Date {
   return d instanceof Date && !isNaN(d.getTime())
 }
 
-const internalRange = ref<{ start: Date; end: Date } | null>(
-  props.modelValue && isValidDate(props.modelValue.start) && isValidDate(props.modelValue.end)
-    ? { start: props.modelValue.start, end: props.modelValue.end }
-    : null
-)
-
-watch(() => props.modelValue, (newVal) => {
-  if (newVal && isValidDate(newVal.start) && isValidDate(newVal.end)) {
-    internalRange.value = { start: newVal.start, end: newVal.end }
-  } else if (!newVal) {
-    internalRange.value = null
-  }
-}, { deep: true })
-
-function selectRange(getRange: () => { start: Date; end: Date }) {
-  const r = getRange()
-  internalRange.value = r
-  emit('update:modelValue', r)
-  isOpen.value = false
+function areDatesEqual(
+  a: { start: unknown; end: unknown } | null | undefined,
+  b: { start: unknown; end: unknown } | null | undefined
+): boolean {
+  if (!a && !b) return true
+  if (!a || !b) return false
+  const aStart = a.start instanceof Date ? a.start.getTime() : null
+  const aEnd = a.end instanceof Date ? a.end.getTime() : null
+  const bStart = b.start instanceof Date ? b.start.getTime() : null
+  const bEnd = b.end instanceof Date ? b.end.getTime() : null
+  return aStart === bStart && aEnd === bEnd
 }
 
-watch(internalRange, (val) => {
-  if (val && isValidDate(val.start) && isValidDate(val.end)) {
-    emit('update:modelValue', { start: val.start, end: val.end })
+// Internal selection state for the calendar inside the popover
+const internalRange = ref<{ start: Date; end: Date } | null>(null)
+
+function syncFromProps() {
+  if (props.modelValue && isValidDate(props.modelValue.start) && isValidDate(props.modelValue.end)) {
+    if (!areDatesEqual(props.modelValue, internalRange.value)) {
+      internalRange.value = {
+        start: new Date(props.modelValue.start.getTime()),
+        end: new Date(props.modelValue.end.getTime())
+      }
+    }
+  } else {
+    internalRange.value = null
+  }
+}
+
+// Initial sync
+syncFromProps()
+
+// Sync when popover is opened
+watch(isOpen, (open) => {
+  if (open) {
+    syncFromProps()
   }
 })
 
+// Sync if props.modelValue changed while popover is closed
+watch(() => props.modelValue, () => {
+  if (!isOpen.value) {
+    syncFromProps()
+  }
+})
+
+// Called ONLY on user interaction: clicking a preset shortcut
+function selectRange(getRange: () => { start: Date; end: Date }) {
+  const r = getRange()
+  internalRange.value = r
+  if (!areDatesEqual(r, props.modelValue)) {
+    emit('update:modelValue', r)
+  }
+  isOpen.value = false
+}
+
+// Called ONLY on user interaction: clicking dates in the calendar
+function onCalendarUpdate(val: any) {
+  internalRange.value = val
+
+  // If user completed a 2-date range on the calendar, emit it
+  if (val && isValidDate(val.start) && isValidDate(val.end)) {
+    if (!areDatesEqual(val, props.modelValue)) {
+      emit('update:modelValue', { start: val.start, end: val.end })
+    }
+  }
+}
+
+// Apply button in popover footer
 function applyCustomRange() {
   if (internalRange.value) {
     const { start, end } = internalRange.value
+    let target: { start: Date; end: Date } | null = null
     if (isValidDate(start) && isValidDate(end)) {
-      emit('update:modelValue', { start, end })
+      target = { start, end }
     } else if (isValidDate(start)) {
-      emit('update:modelValue', { start, end: start })
+      target = { start, end: start }
+    }
+
+    if (target && !areDatesEqual(target, props.modelValue)) {
+      emit('update:modelValue', target)
     }
   }
   isOpen.value = false
 }
 
+// Cancel button in popover footer
 function cancel() {
-  internalRange.value = props.modelValue && isValidDate(props.modelValue.start) && isValidDate(props.modelValue.end)
-    ? { start: props.modelValue.start, end: props.modelValue.end }
-    : null
+  syncFromProps()
   isOpen.value = false
 }
 
@@ -134,11 +180,13 @@ onUnmounted(() => {
           <div class="p-2 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-800">
             <ClientOnly>
               <VDatePicker 
-                v-model.range="internalRange" 
+                :model-value="internalRange" 
+                is-range
                 :columns="isMobile ? 1 : 2" 
                 color="teal"
                 borderless 
                 transparent
+                @update:model-value="onCalendarUpdate"
               />
             </ClientOnly>
           </div>

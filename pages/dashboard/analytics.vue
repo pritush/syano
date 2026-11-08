@@ -248,12 +248,23 @@ async function loadTags() {
   tags.value = response.data
 }
 
-async function loadAnalytics() {
+let activeRequestId = 0
+let lastLoadedQueryKey = ''
+
+async function loadAnalytics(force = false) {
+  const query = queryParams()
+  const queryKey = JSON.stringify(query)
+
+  // Deduplicate: if the query parameters haven't changed and there was no error, do nothing
+  if (!force && queryKey === lastLoadedQueryKey && !errorMessage.value) {
+    return
+  }
+
+  const currentRequestId = ++activeRequestId
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const query = queryParams()
     const results = await Promise.allSettled([
       api.getAnalyticsCounters(query),
       api.getAnalyticsViews(query),
@@ -263,6 +274,13 @@ async function loadAnalytics() {
       api.getAnalyticsLocations(query),
       api.getQrScans(query),
     ])
+
+    // If a newer request was dispatched while this was in-flight, discard stale results
+    if (currentRequestId !== activeRequestId) {
+      return
+    }
+
+    lastLoadedQueryKey = queryKey
 
     const [counterResult, viewResult, metricResult, heatmapResult, eventResult, locationResult, qrResult] = results
 
@@ -281,9 +299,13 @@ async function loadAnalytics() {
       errorMessage.value = firstError?.data?.statusMessage || firstError?.data?.message || 'Unable to load analytics.'
     }
   } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to load analytics.'
+    if (currentRequestId === activeRequestId) {
+      errorMessage.value = error?.data?.statusMessage || error?.data?.message || 'Unable to load analytics.'
+    }
   } finally {
-    loading.value = false
+    if (currentRequestId === activeRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -348,7 +370,7 @@ onMounted(async () => {
               <UIcon name="lucide:qr-code" class="h-4 w-4" />
               QR Code
             </UButton>
-            <UButton :disabled="loading" @click="loadAnalytics">
+            <UButton :disabled="loading" @click="() => loadAnalytics(true)">
               {{ loading ? 'Refreshing…' : 'Refresh analytics' }}
             </UButton>
           </div>
