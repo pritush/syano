@@ -7,7 +7,7 @@ const cacheTtl = Number(process.env.NUXT_CACHE_TTL || 30)
 const cacheStaleTtl = Number(process.env.NUXT_CACHE_STALE_TTL || 30)
 
 export default defineNuxtConfig({
-  compatibilityDate: '2024-12-01',
+  compatibilityDate: '2026-11-07',
   srcDir: '.',
   dir: {
     app: 'app',
