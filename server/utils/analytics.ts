@@ -1,11 +1,19 @@
 import type { H3Event } from 'h3'
 import { usePool } from '~/server/utils/db'
+import { useAnalyticsCache } from '~/server/utils/cache'
 import type { AnalyticsQuery } from '~/shared/schemas/analytics'
 
 type QueryFragment = {
   joins: string[]
   where: string[]
   values: Array<string | number>
+}
+
+function getAnalyticsCacheKey(prefix: string, filters: AnalyticsQuery): string {
+  const normalized = Object.entries(filters || {})
+    .filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+  return `${prefix}:${JSON.stringify(normalized)}`
 }
 
 function buildFilterSql(filters: AnalyticsQuery): QueryFragment {
@@ -48,6 +56,13 @@ function renderScope(fragment: QueryFragment) {
 export { renderScope, buildFilterSql }
 
 export async function getAnalyticsCounters(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('counters', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
@@ -65,15 +80,25 @@ export async function getAnalyticsCounters(event: H3Event, filters: AnalyticsQue
     scope.values,
   )
 
-  return rows[0] || {
+  const result = rows[0] || {
     total_clicks: 0,
     clicks_last_24h: 0,
     clicks_last_7d: 0,
     unique_slugs: 0,
   }
+
+  cache.set(cacheKey, result, 60)
+  return result
 }
 
 export async function getAnalyticsViews(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('views', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
@@ -91,10 +116,18 @@ export async function getAnalyticsViews(event: H3Event, filters: AnalyticsQuery)
     scope.values,
   )
 
+  cache.set(cacheKey, rows, 60)
   return rows
 }
 
 export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('metrics', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
@@ -163,10 +196,18 @@ export async function getAnalyticsMetrics(event: H3Event, filters: AnalyticsQuer
     }
   }
 
+  cache.set(cacheKey, result, 60)
   return result
 }
 
 export async function getAnalyticsHeatmap(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('heatmap', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
@@ -185,10 +226,18 @@ export async function getAnalyticsHeatmap(event: H3Event, filters: AnalyticsQuer
     scope.values,
   )
 
+  cache.set(cacheKey, rows, 60)
   return rows
 }
 
 export async function getAnalyticsEvents(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('events', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scopedFilters = { ...filters, limit: filters.limit || 50 }
   const scope = renderScope(buildFilterSql(scopedFilters))
@@ -216,10 +265,18 @@ export async function getAnalyticsEvents(event: H3Event, filters: AnalyticsQuery
     values,
   )
 
+  cache.set(cacheKey, rows, 15) // shorter TTL for live events
   return rows
 }
 
 export async function getAnalyticsLocations(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('locations', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const scope = renderScope(buildFilterSql(filters))
 
@@ -242,10 +299,18 @@ export async function getAnalyticsLocations(event: H3Event, filters: AnalyticsQu
     scope.values,
   )
 
+  cache.set(cacheKey, rows, 60)
   return rows
 }
 
 export async function getQrScans(event: H3Event, filters: AnalyticsQuery) {
+  const cache = useAnalyticsCache()
+  const cacheKey = getAnalyticsCacheKey('qr_scans', filters)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const pool = await usePool(event)
   const fragment = buildFilterSql(filters)
   const scope = renderScope(fragment)
@@ -260,5 +325,7 @@ export async function getQrScans(event: H3Event, filters: AnalyticsQuery) {
     scope.values,
   )
 
-  return { qr_scans: rows[0]?.qr_scans || 0 }
+  const result = { qr_scans: rows[0]?.qr_scans || 0 }
+  cache.set(cacheKey, result, 60)
+  return result
 }

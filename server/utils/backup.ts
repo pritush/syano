@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { desc } from 'drizzle-orm'
 import { links, tags, site_settings, access_logs } from '~/server/database/schema'
 import { useDrizzle } from '~/server/utils/db'
 
@@ -13,14 +14,25 @@ export interface DatabaseBackup {
   }
 }
 
-export async function getCompleteBackup(event: H3Event): Promise<DatabaseBackup> {
+export interface BackupOptions {
+  maxLogs?: number
+  includeLogs?: boolean
+}
+
+export async function getCompleteBackup(event: H3Event, options: BackupOptions = {}): Promise<DatabaseBackup> {
   const db = await useDrizzle(event)
+  const maxLogs = options.maxLogs !== undefined ? options.maxLogs : 10000
+  const includeLogs = options.includeLogs !== false
 
   const [t, l, s, a] = await Promise.all([
     db.select().from(tags).execute(),
     db.select().from(links).execute(),
     db.select().from(site_settings).execute(),
-    db.select().from(access_logs).execute(),
+    includeLogs
+      ? maxLogs > 0
+        ? db.select().from(access_logs).orderBy(desc(access_logs.created_at)).limit(maxLogs).execute()
+        : db.select().from(access_logs).orderBy(desc(access_logs.created_at)).execute()
+      : Promise.resolve([]),
   ])
 
   return {

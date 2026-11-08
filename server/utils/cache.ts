@@ -176,6 +176,13 @@ export function invalidateTagsCache() {
 }
 
 /**
+ * Invalidate analytics cache
+ */
+export function invalidateAnalyticsCache() {
+  useAnalyticsCache().clear()
+}
+
+/**
  * Get cache statistics
  */
 export function getCacheStats() {

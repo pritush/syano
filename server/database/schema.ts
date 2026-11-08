@@ -1,4 +1,4 @@
-import { bigint, boolean, doublePrecision, inet, integer, jsonb, pgTable, text, timestamp, uuid, varchar, uniqueIndex } from 'drizzle-orm/pg-core'
+import { bigint, boolean, doublePrecision, inet, integer, jsonb, pgTable, text, timestamp, uuid, varchar, index, uniqueIndex } from 'drizzle-orm/pg-core'
 
 export const tags = pgTable('tags', {
   id: varchar('id', { length: 64 }).primaryKey().notNull(),
@@ -37,7 +37,12 @@ export const links = pgTable('links', {
   click_count: integer('click_count').default(0).notNull(),
   tag_id: varchar('tag_id', { length: 64 }).references(() => tags.id, { onDelete: 'set null' }),
   sender_id: uuid('sender_id').references(() => sender_ids.id, { onDelete: 'set null' }),
-})
+}, (table) => ({
+  idx_links_created_at: index('idx_links_created_at').on(table.created_at.desc()),
+  idx_links_tag_id: index('idx_links_tag_id').on(table.tag_id),
+  idx_links_id_tag: index('idx_links_id_tag').on(table.id.desc(), table.tag_id),
+  idx_links_expiration: index('idx_links_expiration').on(table.expiration),
+}))
 
 export const access_logs = pgTable('access_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -65,7 +70,16 @@ export const access_logs = pgTable('access_logs', {
   utm_term: varchar('utm_term', { length: 128 }),
   utm_content: varchar('utm_content', { length: 128 }),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_access_logs_slug_date: index('idx_access_logs_slug_date').on(table.slug, table.created_at.desc()),
+  idx_access_logs_link_date: index('idx_access_logs_link_date').on(table.link_id, table.created_at.desc()),
+  idx_access_logs_created_at: index('idx_access_logs_created_at').on(table.created_at.desc()),
+  idx_access_logs_country: index('idx_access_logs_country').on(table.country),
+  idx_access_logs_browser: index('idx_access_logs_browser').on(table.browser_type),
+  idx_access_logs_device: index('idx_access_logs_device').on(table.device_type),
+  idx_access_logs_os: index('idx_access_logs_os').on(table.os),
+  idx_access_logs_referer: index('idx_access_logs_referer').on(table.referer),
+}))
 
 export const site_settings = pgTable('site_settings', {
   id: varchar('id', { length: 8 }).primaryKey().notNull(),
@@ -81,7 +95,11 @@ export const qr_scans = pgTable('qr_scans', {
   link_id: varchar('link_id', { length: 64 }).references(() => links.id, { onDelete: 'cascade' }),
   slug: varchar('slug', { length: 128 }),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_qr_scans_link_date: index('idx_qr_scans_link_date').on(table.link_id, table.created_at.desc()),
+  idx_qr_scans_slug: index('idx_qr_scans_slug').on(table.slug),
+  idx_qr_scans_created_at: index('idx_qr_scans_created_at').on(table.created_at.desc()),
+}))
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -92,7 +110,9 @@ export const users = pgTable('users', {
   is_active: boolean('is_active').default(true),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_users_username: index('idx_users_username').on(table.username),
+}))
 
 export const audit_logs = pgTable('audit_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -105,7 +125,12 @@ export const audit_logs = pgTable('audit_logs', {
   details: jsonb('details'),
   ip: inet('ip'),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_audit_logs_created_at: index('idx_audit_logs_created_at').on(table.created_at.desc()),
+  idx_audit_logs_actor_id: index('idx_audit_logs_actor_id').on(table.actor_id),
+  idx_audit_logs_action: index('idx_audit_logs_action').on(table.action),
+  idx_audit_logs_entity_type: index('idx_audit_logs_entity_type').on(table.entity_type),
+}))
 
 export const api_keys = pgTable('api_keys', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -120,7 +145,11 @@ export const api_keys = pgTable('api_keys', {
   is_active: boolean('is_active').default(true),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_api_keys_user_id: index('idx_api_keys_user_id').on(table.user_id),
+  idx_api_keys_key_prefix: index('idx_api_keys_key_prefix').on(table.key_prefix),
+  idx_api_keys_key_hash: index('idx_api_keys_key_hash').on(table.key_hash),
+}))
 
 export const webhooks = pgTable('webhooks', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -134,7 +163,9 @@ export const webhooks = pgTable('webhooks', {
   last_triggered_at: timestamp('last_triggered_at', { withTimezone: true, mode: 'date' }),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_webhooks_user_id: index('idx_webhooks_user_id').on(table.user_id),
+}))
 
 export const webhook_deliveries = pgTable('webhook_deliveries', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -145,7 +176,10 @@ export const webhook_deliveries = pgTable('webhook_deliveries', {
   response_body: text('response_body'),
   error: text('error'),
   delivered_at: timestamp('delivered_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_webhook_deliveries_webhook_id: index('idx_webhook_deliveries_webhook_id').on(table.webhook_id),
+  idx_webhook_deliveries_delivered_at: index('idx_webhook_deliveries_delivered_at').on(table.delivered_at.desc()),
+}))
 
 export const api_rate_limits = pgTable('api_rate_limits', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -154,4 +188,6 @@ export const api_rate_limits = pgTable('api_rate_limits', {
   request_count: bigint('request_count', { mode: 'number' }).default(0),
   window_start: timestamp('window_start', { withTimezone: true, mode: 'date' }).defaultNow(),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
-})
+}, (table) => ({
+  idx_api_rate_limits_key_endpoint: index('idx_api_rate_limits_key_endpoint').on(table.api_key_id, table.endpoint, table.window_start),
+}))
