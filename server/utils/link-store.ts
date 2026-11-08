@@ -254,6 +254,40 @@ export async function listLinks(
   }
 }
 
+export async function countLinks(
+  event: H3Event,
+  options?: {
+    tag_id?: string
+    search?: string
+  },
+) {
+  const db = await useDrizzle(event)
+  const filters = []
+
+  if (options?.tag_id) {
+    filters.push(eq(links.tag_id, options.tag_id))
+  }
+
+  if (options?.search) {
+    const q = `%${options.search}%`
+    filters.push(
+      or(
+        ilike(links.slug, q),
+        ilike(links.url, q),
+        ilike(links.comment, q),
+        ilike(links.title, q),
+      ),
+    )
+  }
+
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(links)
+    .where(filters.length ? and(...filters) : undefined)
+
+  return result?.count || 0
+}
+
 export async function searchLinks(event: H3Event, query: string, limit: number) {
   const db = await useDrizzle(event)
   const q = `%${query}%`
@@ -264,15 +298,11 @@ export async function searchLinks(event: H3Event, query: string, limit: number) 
           ilike(links.slug, q),
           ilike(links.url, q),
           ilike(links.comment, q),
+          ilike(links.title, q),
         )
       : undefined,
     orderBy: [desc(links.id)],
     limit,
-    columns: {
-      slug: true,
-      url: true,
-      comment: true,
-    },
   })
 }
 

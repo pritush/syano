@@ -25,9 +25,9 @@ export default defineNuxtConfig({
           // Suppress sourcemap warnings for Nuxt plugins
           sourcemapExcludeSources: true,
           // Manual chunking for better code splitting
-          manualChunks: {
-            'd3': ['d3-geo'],
-            'topojson': ['topojson-client'],
+          manualChunks(id) {
+            if (id.includes('d3-geo')) return 'd3'
+            if (id.includes('topojson-client')) return 'topojson'
           },
         },
       },
@@ -138,6 +138,16 @@ export default defineNuxtConfig({
       componentDetection: true,
     },
   },
+  icon: {
+    provider: 'server',
+    serverBundle: {
+      collections: ['lucide'],
+    },
+    clientBundle: {
+      scan: true,
+      sizeLimitKb: 256,
+    },
+  },
   runtimeConfig: {
     // Database URL should ONLY be accessed at runtime, never at build time
     // Nuxt will automatically map NUXT_DATABASE_URL env var to this
@@ -192,12 +202,12 @@ export default defineNuxtConfig({
   
   // Suppress Vite sourcemap warnings
   hooks: {
-    'vite:extendConfig': (config) => {
+    'vite:extendConfig': (config: any) => {
       if (config.build?.rollupOptions?.onwarn) return
       if (!config.build) config.build = {}
       if (!config.build.rollupOptions) config.build.rollupOptions = {}
       
-      config.build.rollupOptions.onwarn = (warning, warn) => {
+      config.build.rollupOptions.onwarn = (warning: any, warn: any) => {
         // Suppress sourcemap warnings from Nuxt plugins
         if (warning.code === 'SOURCEMAP_ERROR' && warning.message?.includes('nuxt:')) {
           return

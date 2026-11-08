@@ -13,9 +13,10 @@ export type AuditEntityType =
   | 'tag'
   | 'user'
   | 'settings'
+  | 'sender_id'
 
 export interface AuditEntry {
-  actor: AuthUser
+  actor: AuthUser | { id?: string; userId?: string; username?: string; displayName?: string; apiKeyName?: string }
   action: AuditAction
   entityType: AuditEntityType
   entityId?: string
@@ -41,9 +42,12 @@ export function recordAudit(event: H3Event, entry: AuditEntry): void {
 async function _writeAudit(event: H3Event, entry: AuditEntry, ip: string | null) {
   const db = await useDrizzle(event)
 
+  const actorId = 'id' in entry.actor && entry.actor.id ? entry.actor.id : ('userId' in entry.actor ? (entry.actor as any).userId : 'unknown')
+  const actorUsername = entry.actor.displayName || entry.actor.username || ('apiKeyName' in entry.actor ? (entry.actor as any).apiKeyName : 'Unknown') || 'Unknown'
+
   await db.insert(audit_logs).values({
-    actor_id: entry.actor.id,
-    actor_username: entry.actor.displayName || entry.actor.username,
+    actor_id: actorId,
+    actor_username: actorUsername,
     action: entry.action,
     entity_type: entry.entityType,
     entity_id: entry.entityId ?? null,

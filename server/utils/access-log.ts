@@ -69,16 +69,14 @@ export function useAccessLog(event: H3Event, link: StoredLink) {
     return
   }
 
-  const parser = new UAParser(ua)
-  const result = parser.getResult()
-  const ip = normalizeIp(getRequestIP(event, { xForwardedFor: true }) || null)
-  const geo = ip ? geoip.lookup(ip) : null
-  const deviceType = result.device.type || 'desktop'
-
+  const rawIp = getRequestIP(event, { xForwardedFor: true }) || null
+  const referer = getHeader(event, 'referer') || null
+  const acceptLanguage = getHeader(event, 'accept-language') || ''
   const query = getQuery(event)
 
   // Fire-and-forget: don't block the redirect response
-  _writeAccessLog(event, link, ua, result, geo, deviceType, query)
+  // Heavy UA parsing and GeoIP lookups run in the background
+  _writeAccessLog(event, link, ua, rawIp, referer, acceptLanguage, query)
     .catch(err => console.error('[AccessLog] Failed to write access log:', err))
 }
 
@@ -86,11 +84,17 @@ async function _writeAccessLog(
   event: H3Event,
   link: StoredLink,
   ua: string,
-  result: ReturnType<UAParser['getResult']>,
-  geo: ReturnType<typeof geoip.lookup>,
-  deviceType: string,
+  rawIp: string | null,
+  referer: string | null,
+  acceptLanguage: string,
   query: Record<string, any>,
 ) {
+  const parser = new UAParser(ua)
+  const result = parser.getResult()
+  const ip = normalizeIp(rawIp)
+  const geo = ip ? geoip.lookup(ip) : null
+  const deviceType = result.device.type || 'desktop'
+
   const db = await useDrizzle(event)
 
   // Record standard access log
@@ -100,12 +104,12 @@ async function _writeAccessLog(
     url: link.url,
     ua,
     ip: null, // REDACTED FOR PRIVACY
-    referer: getHeader(event, 'referer') || null,
+    referer,
     country: geo?.country || null,
     region: geo?.region || null,
     city: geo?.city || null,
     timezone: geo?.timezone || null,
-    language: pickPrimaryLanguage(getHeader(event, 'accept-language') || ''),
+    language: pickPrimaryLanguage(acceptLanguage),
     os: formatOs(result.os),
     browser: formatBrowser(result.browser),
     browser_type: result.browser.name || result.engine.name || 'Unknown',

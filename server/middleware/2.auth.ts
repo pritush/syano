@@ -13,6 +13,11 @@ export default defineEventHandler(async (event) => {
     return
   }
 
+  // Health check endpoint (used by Docker HEALTHCHECK and monitoring)
+  if (pathname === '/api/health') {
+    return
+  }
+
   // Allow Nuxt Icon API requests
   if (pathname.startsWith('/api/_nuxt_icon/')) {
     return

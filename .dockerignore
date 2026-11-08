@@ -1,0 +1,45 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Environment variables & secrets (CRITICAL for Docker Hub publishing)
+.env
+.env.*
+!.env.example
+
+# Build outputs & dependencies
+node_modules
+.output
+.nuxt
+.data
+dist
+coverage
+
+# IDE & OS files
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs & scratch
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Documentation & tests
+docs/
+md/
+

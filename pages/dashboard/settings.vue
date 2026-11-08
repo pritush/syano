@@ -70,7 +70,9 @@ const bioColorOptions = [
   { label: 'Slate', value: 'slate' },
 ]
 
-const socialPlatforms = [
+type PlatformOption = { label: string; value: string }
+
+const socialPlatforms: PlatformOption[] = [
   { label: 'Website / Other', value: 'website' },
   { label: 'Twitter / X', value: 'twitter' },
   { label: 'Instagram', value: 'instagram' },
@@ -97,16 +99,29 @@ const socialPlatforms = [
   { label: 'Email', value: 'email' },
 ]
 
-const form = reactive({
-  homepage_mode: 'DEFAULT' as SiteSettings['homepage_mode'],
+interface SettingsForm {
+  homepage_mode: SiteSettings['homepage_mode']
+  redirect_url: string
+  redirect_timeout: number
+  profile_name: string
+  profile_bio: string
+  profile_initials: string
+  profile_avatar_url: string
+  bio_links: BioLinkRow[]
+  socials: BioSocialRow[]
+  trai_sms_enabled: boolean
+}
+
+const form = ref<SettingsForm>({
+  homepage_mode: 'DEFAULT',
   redirect_url: '',
   redirect_timeout: 3,
   profile_name: 'Syano',
   profile_bio: '',
   profile_initials: 'SY',
   profile_avatar_url: '',
-  bio_links: [] as BioLinkRow[],
-  socials: [] as BioSocialRow[],
+  bio_links: [],
+  socials: [],
   trai_sms_enabled: false,
 })
 
@@ -139,14 +154,14 @@ function newId() {
 }
 
 function applySettings(settings: SiteSettings) {
-  form.homepage_mode = settings.homepage_mode
-  form.redirect_url = settings.redirect_url || ''
-  form.redirect_timeout = settings.redirect_timeout ?? 3
-  form.profile_name = settings.bio_content.profile.name
-  form.profile_bio = settings.bio_content.profile.bio || ''
-  form.profile_initials = settings.bio_content.profile.initials || ''
-  form.profile_avatar_url = settings.bio_content.profile.avatar_url || ''
-  form.bio_links = settings.bio_content.links.map((link) => ({
+  form.value.homepage_mode = settings.homepage_mode
+  form.value.redirect_url = settings.redirect_url || ''
+  form.value.redirect_timeout = settings.redirect_timeout ?? 3
+  form.value.profile_name = settings.bio_content.profile.name
+  form.value.profile_bio = settings.bio_content.profile.bio || ''
+  form.value.profile_initials = settings.bio_content.profile.initials || ''
+  form.value.profile_avatar_url = settings.bio_content.profile.avatar_url || ''
+  form.value.bio_links = settings.bio_content.links.map((link) => ({
     id: link.id,
     title: link.title,
     url: link.url,
@@ -154,11 +169,11 @@ function applySettings(settings: SiteSettings) {
     icon: link.icon || 'link',
     color: link.color || 'brand',
   }))
-  form.socials = settings.bio_content.socials.map((social) => ({
+  form.value.socials = settings.bio_content.socials.map((social) => ({
     platform: social.platform,
     url: social.url,
   }))
-  form.trai_sms_enabled = settings.trai_sms_enabled
+  form.value.trai_sms_enabled = settings.trai_sms_enabled
 }
 
 function formatUrl(val: string): string {
@@ -170,17 +185,17 @@ function formatUrl(val: string): string {
 
 function buildSettingsPayload(): SiteSettings {
   return {
-    homepage_mode: form.homepage_mode,
-    redirect_url: formatUrl(form.redirect_url) || null,
-    redirect_timeout: Number(form.redirect_timeout) || 0,
+    homepage_mode: form.value.homepage_mode,
+    redirect_url: formatUrl(form.value.redirect_url) || null,
+    redirect_timeout: Number(form.value.redirect_timeout) || 0,
     bio_content: {
       profile: {
-        name: form.profile_name.trim() || 'Syano',
-        bio: form.profile_bio.trim() || null,
-        initials: form.profile_initials.trim() || null,
-        avatar_url: formatUrl(form.profile_avatar_url) || null,
+        name: form.value.profile_name.trim() || 'Syano',
+        bio: form.value.profile_bio.trim() || null,
+        initials: form.value.profile_initials.trim() || null,
+        avatar_url: formatUrl(form.value.profile_avatar_url) || null,
       },
-      links: form.bio_links
+      links: form.value.bio_links
         .filter((link) => link.title.trim() && link.url.trim())
         .map((link) => ({
           id: link.id || newId(),
@@ -190,21 +205,21 @@ function buildSettingsPayload(): SiteSettings {
           icon: link.icon || 'link',
           color: link.color || 'brand',
         })),
-      socials: form.socials
+      socials: form.value.socials
         .filter((social) => social.platform.trim() && social.url.trim())
         .map((social) => ({
           platform: social.platform.trim(),
           url: formatUrl(social.url),
         })),
     },
-    trai_sms_enabled: form.trai_sms_enabled,
+    trai_sms_enabled: form.value.trai_sms_enabled,
   }
 }
 
 
 
 function addBioLink() {
-  form.bio_links.push({
+  form.value.bio_links.push({
     id: newId(),
     title: '',
     url: '',
@@ -212,7 +227,7 @@ function addBioLink() {
     icon: 'link',
     color: 'brand',
   })
-  editingLinkIndex.value = form.bio_links.length - 1
+  editingLinkIndex.value = form.value.bio_links.length - 1
   toasts.created('bio link', 'Link')
 }
 
@@ -227,7 +242,7 @@ function closeLinkEditor() {
 }
 
 function addSocial() {
-  form.socials.push({
+  form.value.socials.push({
     platform: '',
     url: '',
   })
@@ -236,7 +251,7 @@ function addSocial() {
 function addSocialFromForm() {
   if (!newSocialPlatform.value || !newSocialUrl.value) return
   
-  form.socials.push({
+  form.value.socials.push({
     platform: newSocialPlatform.value,
     url: newSocialUrl.value,
   })
@@ -260,7 +275,7 @@ function closeSocialEditor() {
 }
 
 async function removeBioLink(index: number) {
-  const link = form.bio_links[index]
+  const link = form.value.bio_links[index]
   if (!link) {
     return
   }
@@ -273,13 +288,17 @@ async function removeBioLink(index: number) {
   deleteModalOpen.value = true
 }
 
+function getPlatformLabel(platform: string) {
+  return socialPlatforms.find((item) => item.value === platform)?.label || platform
+}
+
 async function removeSocial(index: number) {
-  const social = form.socials[index]
+  const social = form.value.socials[index]
   if (!social) {
     return
   }
 
-  const platformLabel = socialPlatforms.find((item) => item.value === social.platform)?.label || social.platform
+  const platformLabel = getPlatformLabel(social.platform)
   deleteTarget.value = {
     type: 'social',
     index,
@@ -301,33 +320,33 @@ async function confirmDeleteTarget() {
   }
 
   if (target.type === 'link') {
-    const link = form.bio_links[target.index]
+    const link = form.value.bio_links[target.index]
     if (!link) {
       closeDeleteModal()
       return
     }
 
-    form.bio_links.splice(target.index, 1)
+    form.value.bio_links.splice(target.index, 1)
     toasts.deleted(target.name, 'Bio link')
     closeDeleteModal()
     await save()
     return
   }
 
-  const social = form.socials[target.index]
+  const social = form.value.socials[target.index]
   if (!social) {
     closeDeleteModal()
     return
   }
 
-  form.socials.splice(target.index, 1)
+  form.value.socials.splice(target.index, 1)
   toasts.deleted(target.name, 'Social profile')
   closeDeleteModal()
   await save()
 }
 
 function selectMode(mode: SiteSettings['homepage_mode']) {
-  form.homepage_mode = mode
+  form.value.homepage_mode = mode
 }
 
 
@@ -525,7 +544,7 @@ onMounted(loadSettings)
         </div>
 
         <!-- BIO Mode Sections -->
-        <template v-if="form.homepage_mode === 'BIO'">
+        <div v-if="form.homepage_mode === 'BIO'" class="space-y-8">
           <!-- Bio Profile Settings -->
           <div class="rounded-[24px] bg-white p-6 ring-1 ring-slate-200/70 dark:bg-slate-800/50 dark:ring-slate-700/50">
             <div class="mb-6">
@@ -739,7 +758,7 @@ onMounted(loadSettings)
                     </div>
                     <div class="min-w-0 flex-1">
                       <p class="truncate font-medium text-slate-950 dark:text-white">
-                        {{ socialPlatforms.find(p => p.value === social.platform)?.label || social.platform }}
+                        {{ getPlatformLabel(social.platform) }}
                       </p>
                       <p class="truncate text-sm text-slate-500 dark:text-slate-400">
                         {{ social.url }}
@@ -842,7 +861,7 @@ onMounted(loadSettings)
               </UButton>
             </div>
           </div>
-        </template>
+        </div>
 
         <!-- Default Mode -->
         <div v-if="form.homepage_mode === 'DEFAULT'" class="rounded-[24px] bg-white p-6 ring-1 ring-slate-200/70 dark:bg-slate-800/50 dark:ring-slate-700/50">

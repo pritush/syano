@@ -64,8 +64,8 @@ export default defineCachedEventHandler(async (event) => {
       setHeader(event, 'Cache-Control', 'public, max-age=86400') // Cache for 24 hours
       return svgString
     } else if (format === 'png') {
-      // Generate PNG QR code as data URL
-      const pngDataUrl = await QRCode.toDataURL(qrUrl, {
+      // Generate binary PNG image
+      const pngBuffer = await QRCode.toBuffer(qrUrl, {
         width: 512,
         margin: 2,
         color: {
@@ -75,8 +75,9 @@ export default defineCachedEventHandler(async (event) => {
         errorCorrectionLevel: 'M',
       })
 
-      // Return the data URL (can be used directly in img src)
-      return { dataUrl: pngDataUrl }
+      setHeader(event, 'Content-Type', 'image/png')
+      setHeader(event, 'Cache-Control', 'public, max-age=86400') // Cache for 24 hours
+      return pngBuffer
     } else {
       throw createError({
         statusCode: 400,

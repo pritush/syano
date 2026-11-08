@@ -1,12 +1,6 @@
 <script setup lang="ts">
-// Only import on client side to avoid SSR issues
-let d3: any = null
-let topojson: any = null
-
-if (process.client) {
-  d3 = await import('d3-geo')
-  topojson = await import('topojson-client')
-}
+import * as d3 from 'd3-geo'
+import * as topojson from 'topojson-client'
 
 const props = defineProps<{
   items: Array<{
@@ -39,6 +33,31 @@ const countryCentroids: Record<string, [number, number]> = {
   BR: [-14.235, -51.9253],
   SG: [1.3521, 103.8198],
   NP: [28.3949, 84.124],
+  ES: [40.4637, -3.7492],
+  IT: [41.8719, 12.5674],
+  NL: [52.1326, 5.2913],
+  PL: [51.9194, 19.1451],
+  SE: [60.1282, 18.6435],
+  NO: [60.472, 8.4689],
+  DK: [56.2639, 9.5018],
+  FI: [61.9241, 25.7482],
+  IE: [53.1424, -7.6921],
+  CH: [46.8182, 8.2275],
+  AT: [47.5162, 14.5501],
+  BE: [50.5039, 4.4699],
+  CN: [35.8617, 104.1954],
+  KR: [35.9078, 127.7669],
+  MX: [23.6345, -102.5528],
+  ZA: [-30.5595, 22.9375],
+  NZ: [-40.9006, 174.886],
+  AE: [23.4241, 53.8478],
+  SA: [23.8859, 45.0792],
+  PK: [30.3753, 69.3451],
+  BD: [23.685, 90.3563],
+  ID: [-0.7893, 113.9213],
+  TR: [38.9637, 35.2433],
+  RU: [61.524, 105.3188],
+  AR: [-38.4161, -63.6167],
 }
 
 const projection = d3.geoNaturalEarth1()
@@ -105,7 +124,10 @@ function markerRadius(views: number) {
 
 onMounted(async () => {
   try {
-    const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+    // Prefer locally hosted offline asset, fallback to CDN if needed
+    const response = await fetch('/data/countries-110m.json').catch(() =>
+      fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+    )
     const topology = await response.json()
     geoData.value = topojson.feature(topology, topology.objects.countries as any)
   } catch (error) {

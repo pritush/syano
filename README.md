@@ -5,10 +5,10 @@
 **Syano is a powerful self-hosted URL shortener and open source link management platform, ready for enterprise implementation. Take complete control of your short links with advanced analytics, QR codes, link-in-bio pages, and enterprise-grade features. The best Bitly alternative for privacy-conscious teams.**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![Docker Image](https://img.shields.io/docker/image-size/pritush/syano/latest?logo=docker&color=2496ED)](https://hub.docker.com/r/pritush/syano)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D26-brightgreen.svg)](https://nodejs.org)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-%3E%3D14-blue.svg)](https://www.postgresql.org)
 [![Nuxt 3](https://img.shields.io/badge/nuxt-3.x-00DC82.svg)](https://nuxt.com)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg)](https://www.docker.com)
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Deploy](#-deployment-options) • [Documentation](#-documentation) • [Demo](#-live-demo)
 
@@ -218,18 +218,35 @@ Syano isn't just a URL shortener — it's a comprehensive link management platfo
 
 ## 🚀 Quick Start Guide
 
-Get your self-hosted URL shortener running in under 5 minutes.
+Get your self-hosted URL shortener running in under 2 minutes.
 
-### Prerequisites
+### ⚡ Method 1: Docker Compose (Recommended — Fastest)
 
-- **Node.js** 18 or higher
+No Node.js or local PostgreSQL setup required. Runs the official container and auto-initializes the database:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/pritush/syano.git
+cd syano
+
+# 2. Start Syano + PostgreSQL
+docker compose up -d
+```
+
+Visit **http://localhost:3000/dashboard** and log in with the default token: `syano_admin_token_change_in_prod` (or customize it in `docker-compose.yml`).
+
+---
+
+### 💻 Method 2: Local Development with Node.js & pnpm
+
+#### Prerequisites
+- **Node.js** 26 or higher
 - **PostgreSQL** 14 or higher
 - **pnpm** (recommended)
 
-### Installation Steps
+#### Installation Steps
 
-#### 1. Clone the Repository
-
+#### 1. Clone & Install Dependencies
 ```bash
 git clone https://github.com/pritush/syano.git
 cd syano
@@ -237,7 +254,6 @@ pnpm install
 ```
 
 #### 2. Configure Environment Variables
-
 ```bash
 cp .env.example .env
 ```
@@ -332,6 +348,76 @@ netlify deploy --prod
 
 #### Vercel
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/pritush/syano)
+
+### Docker & Container Deployment
+
+#### Option 1: Docker Compose (App + PostgreSQL)
+
+The recommended way to self-host Syano in production is with Docker Compose:
+
+```bash
+# Clone the repository
+git clone https://github.com/pritush/syano.git
+cd syano
+
+# Start Syano and PostgreSQL
+docker compose up -d
+```
+
+This will automatically:
+- Start PostgreSQL 16 and auto-initialize the schema from `database/schema.sql`
+- Run the official Syano image on port `3000`
+- Configure persistent volume storage for PostgreSQL data
+
+Access the dashboard at **http://localhost:3000/dashboard** with the token configured in your `docker-compose.yml` (`syano_admin_token_change_in_prod`).
+
+#### Option 2: Docker Hub Image (Standalone)
+
+Run the pre-built Syano image against an existing PostgreSQL database (Neon, Supabase, RDS, or local):
+
+```bash
+docker run -d \
+  --name syano \
+  -p 3000:3000 \
+  -e NUXT_DATABASE_URL="postgresql://user:password@db-host:5432/dbname" \
+  -e NUXT_SITE_TOKEN="your-secure-admin-token" \
+  -e NUXT_SITE_USER="root" \
+  -e NUXT_PUBLIC_SITE_URL="https://yourdomain.com" \
+  -e ENCRYPTION_KEY="your-32-character-secret-encryption-key" \
+  --restart unless-stopped \
+  pritush/syano:latest
+```
+
+#### Option 3: Build & Publish to Docker Hub
+
+```bash
+# 1. Build the local image
+docker build -t pritush/syano:latest .
+
+# 2. Log in and publish to Docker Hub
+docker login
+docker push pritush/syano:latest
+
+# Or build multi-arch (AMD64 & ARM64) with buildx:
+docker buildx build --platform linux/amd64,linux/arm64 -t pritush/syano:latest -t pritush/syano:1.0.0 --push .
+```
+
+#### Docker Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `NUXT_DATABASE_URL` | *Required* | PostgreSQL connection URL (`postgresql://user:pass@host:5432/dbname`) |
+| `NUXT_SITE_TOKEN` | *Auto-generated* | Secret token required to log into `/dashboard` |
+| `NUXT_SITE_USER` | `root` | Admin username for dashboard access |
+| `NUXT_PUBLIC_SITE_URL` | `http://localhost:3000` | Public production domain (used for QR code tracking links) |
+| `ENCRYPTION_KEY` | *Required in Prod* | 32+ character random string for encrypting API keys |
+| `NUXT_REDIRECT_STATUS_CODE` | `301` | Default redirect HTTP status code (`301`, `302`, `307`) |
+| `NUXT_REDIRECT_WITH_QUERY` | `false` | Pass incoming query params through to redirect URLs |
+| `NUXT_CASE_SENSITIVE` | `false` | Enable case-sensitive slugs (`/abc` vs `/ABC`) |
+| `NUXT_PUBLIC_SLUG_DEFAULT_LENGTH` | `4` | Default length for randomly generated short links |
+| `PORT` | `3000` | Port the internal HTTP server binds to |
+| `HOST` | `0.0.0.0` | Host interface the internal server binds to |
+
 
 
 ## 🎯 Use Cases

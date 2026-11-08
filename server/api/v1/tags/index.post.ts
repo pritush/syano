@@ -65,11 +65,12 @@ export default defineEventHandler(async (event) => {
     console.log('[Tag Creation] Tag created successfully:', tag)
     
     // Record audit log
-    await recordAudit(event, {
-      user_id: auth.userId,
-      action: 'tag.create',
-      resource_type: 'tag',
-      resource_id: tag.id,
+    recordAudit(event, {
+      actor: auth,
+      action: 'create',
+      entityType: 'tag',
+      entityId: tag.id,
+      entityLabel: tag.name,
       details: { name: tag.name },
     })
     
