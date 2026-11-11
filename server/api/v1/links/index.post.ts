@@ -167,7 +167,7 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Validation failed',
-      data: validation.error.errors,
+      data: validation.error.issues,
     })
   }
   

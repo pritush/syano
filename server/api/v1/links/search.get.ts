@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Invalid query parameters',
-      data: parsed.error.errors,
+      data: parsed.error.issues,
     })
   }
 

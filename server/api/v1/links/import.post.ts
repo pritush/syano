@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Invalid import payload',
-      data: parsed.error.errors,
+      data: parsed.error.issues,
     })
   }
 

@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Invalid analytics query',
-      data: parsed.error.errors,
+      data: parsed.error.issues,
     })
   }
 

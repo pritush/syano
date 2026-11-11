@@ -65,12 +65,12 @@ export default defineEventHandler(async (event) => {
   const validation = updateLinkSchema.safeParse(body)
   
   if (!validation.success) {
-    console.error('[Link Update] Validation failed:', validation.error.errors)
+    console.error('[Link Update] Validation failed:', validation.error.issues)
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Validation failed',
-      data: validation.error.errors,
+      data: validation.error.issues,
     })
   }
   

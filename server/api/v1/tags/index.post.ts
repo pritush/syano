@@ -37,12 +37,12 @@ export default defineEventHandler(async (event) => {
   const validation = createTagSchema.safeParse(body)
   
   if (!validation.success) {
-    console.error('[Tag Creation] Validation failed:', validation.error.errors)
+    console.error('[Tag Creation] Validation failed:', validation.error.issues)
     throw createError({
       statusCode: 400,
       statusMessage: 'Bad Request',
       message: 'Validation failed',
-      data: validation.error.errors,
+      data: validation.error.issues,
     })
   }
   

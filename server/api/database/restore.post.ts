@@ -93,8 +93,21 @@ const RestoreOptionsSchema = z.object({
       tags: z.boolean().default(true),
       access_logs: z.boolean().default(false),
       site_settings: z.boolean().default(true),
-    }).default({}),
-  }).default({}),
+    }).default({
+      links: true,
+      tags: true,
+      access_logs: false,
+      site_settings: true,
+    }),
+  }).default({
+    clearExisting: false,
+    restoreTables: {
+      links: true,
+      tags: true,
+      access_logs: false,
+      site_settings: true,
+    },
+  }),
 })
 
 /**
