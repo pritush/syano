@@ -12,7 +12,11 @@ const __dirname = dirname(__filename)
 
 // Load environment variables
 const envPath = resolve(__dirname, '../.env')
-console.log('Loading environment from:', envPath)
+try {
+  process.loadEnvFile(envPath)
+} catch {
+  // If .env file does not exist or environment is already configured
+}
 
 async function testQrTracking() {
   try {

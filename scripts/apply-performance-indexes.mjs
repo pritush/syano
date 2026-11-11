@@ -13,11 +13,14 @@
  */
 
 import { Pool } from 'pg'
-import { config } from 'dotenv'
 import { resolve } from 'path'
 
 // Load environment variables
-config({ path: resolve(process.cwd(), '.env') })
+try {
+  process.loadEnvFile(resolve(process.cwd(), '.env'))
+} catch {
+  // If .env file does not exist or environment is already configured
+}
 
 const indexes = [
   {
@@ -43,11 +46,11 @@ const indexes = [
 ]
 
 async function applyIndexes() {
-  const connectionString = process.env.DATABASE_URL
+  const connectionString = process.env.NUXT_DATABASE_URL || process.env.DATABASE_URL
 
   if (!connectionString) {
-    console.error('❌ Error: DATABASE_URL environment variable is not set')
-    console.error('   Please set DATABASE_URL in your .env file')
+    console.error('❌ Error: NUXT_DATABASE_URL or DATABASE_URL environment variable is not set')
+    console.error('   Please set NUXT_DATABASE_URL in your .env file')
     process.exit(1)
   }
 

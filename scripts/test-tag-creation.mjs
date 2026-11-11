@@ -11,6 +11,12 @@ import crypto from 'node:crypto'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+try {
+  process.loadEnvFile(resolve(__dirname, '../.env'))
+} catch {
+  // If .env file does not exist or environment is already configured
+}
+
 async function testTagCreation() {
   try {
     const databaseUrl = process.env.NUXT_DATABASE_URL
@@ -71,7 +77,7 @@ async function testTagCreation() {
     // Test tag insertion
     console.log('\n🧪 Testing manual tag insertion...')
     const testTagName = `Test Tag ${Date.now()}`
-    const testTagId = crypto.randomUUID()
+    const testTagId = crypto.randomBytes(13).toString('hex')
     
     try {
       const insertResult = await pool.query(

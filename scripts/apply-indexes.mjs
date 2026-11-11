@@ -13,6 +13,12 @@ import pg from 'pg'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+try {
+  process.loadEnvFile(join(__dirname, '../.env'))
+} catch {
+  // If .env file does not exist or environment is already configured
+}
+
 // Read database URL from environment
 const databaseUrl = process.env.NUXT_DATABASE_URL || process.env.DATABASE_URL
 
